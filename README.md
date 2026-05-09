@@ -154,6 +154,31 @@ print(data.this.is.missing)  # None
 ```
 
 
+### Usage: Typed defaults with `.value()`
+For most uses, calling a Chain with `()` is enough to unwrap it. But when you want a fallback for missing data — or you want to coerce the value to a particular type — use `.value()`:
+
+```python
+data = Chain({
+    "user": {
+        "role": None,
+        "age": "30",
+    }
+})
+
+# Fallback for missing or None values
+print(data.user.role.value(default="guest"))  # "guest"
+print(data.user.missing.value(default="n/a"))  # "n/a"
+
+# Coerce to a type, with a typed fallback
+print(data.user.age.value(int, default=0))  # 30
+print(data.user.missing.value(int, default=0))  # 0
+
+# Coercion failures fall back too — never raises
+print(data.user.role.value(int, default=-1))  # -1
+```
+
+This replaces the common `... or "default"` pattern at the end of a chain. Because the default's type pins the return type, your IDE and type checker can infer it correctly when the chain is annotated.
+
 ### Usage: Special values and identity comparisons
 When you access items through a `Chain`, it's not directly returning the value, it's returning a `Chain` wrapping the value.
 A `Chain` is a very powerful and dynamic object that allows all sorts of operations on it, but it's not the same as the raw value.

@@ -61,6 +61,14 @@ class TestReadmeExamples(unittest.TestCase):
         assert data.user.address.city == "Wonderland"
         assert data.this.is_missing() is None
 
+    def test_typed_defaults_with_value(self):
+        data = Chain({"user": {"role": None, "age": "30"}})
+        assert data.user.role.value(default="guest") == "guest"
+        assert data.user.missing.value(default="n/a") == "n/a"
+        assert data.user.age.value(int, default=0) == 30
+        assert data.user.missing.value(int, default=0) == 0
+        assert data.user.role.value(int, default=-1) == -1
+
     def test_identity_comparisons(self):
         data = Chain({"name": "John Doe", "age": 30, "is_active": True})
         # Wrapped values are not the raw values — `is` against True/None fails.

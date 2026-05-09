@@ -1,4 +1,4 @@
 [flake8]
 exclude = .git,__pycache__,.pytest_cache,.idea,.env,.venv,.vscode
-ignore = E711,E712
+ignore = E704,E711,E712
 max-line-length = 120
