@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json as _json
 from collections.abc import Callable, Iterator
 from typing import Any, TypeVar, overload
 
-from .sniff import isdictlike, isiterable
+from .sniff import isdictlike, isiterable, islistlike
 
 T = TypeVar("T")
 
@@ -49,6 +50,37 @@ class Chain:
             return type_(wrapped)
         except (TypeError, ValueError):
             return default
+
+    def json(self, indent: int | None = None, **kwargs: Any) -> str:
+        """Serialize the wrapped value to a JSON string.
+
+        A missing or ``None`` wrapped value serializes to ``"null"`` rather
+        than raising. Extra keyword arguments are forwarded to
+        :func:`json.dumps`, so ``chain.json(indent=2, default=str)`` works.
+        """
+        return _json.dumps(self._wrapped, indent=indent, **kwargs)
+
+    def dict(self) -> dict[Any, Any]:
+        """Return the wrapped value as a plain ``dict``.
+
+        Returns an empty dict when the wrapped value isn't dict-like, keeping
+        with the library's never-raise philosophy.
+        """
+        if isdictlike(self._wrapped):
+            return dict(self._wrapped)
+
+        return {}
+
+    def list(self) -> list[Any]:
+        """Return the wrapped value as a plain ``list``.
+
+        Returns an empty list when the wrapped value isn't list-like — strings
+        and dicts don't count — keeping with the never-raise philosophy.
+        """
+        if islistlike(self._wrapped):
+            return list(self._wrapped)
+
+        return []
 
     def __str__(self) -> str:
         return str(self._wrapped)

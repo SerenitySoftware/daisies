@@ -179,6 +179,34 @@ print(data.user.role.value(int, default=-1))  # -1
 
 This replaces the common `... or "default"` pattern at the end of a chain. Because the default's type pins the return type, your IDE and type checker can infer it correctly when the chain is annotated.
 
+### Usage: Getting data back out with `.json()`, `.dict()`, and `.list()`
+Once you've navigated to the part of a payload you care about, you usually want to send it back out — re-serialize it for another API, log it, cache it, or hand it to a template. Daisies gives you three unwrapping methods so you never have to reach for `json.dumps(...)` or the private `._wrapped` attribute.
+
+```python
+data = Chain({
+    "user": {
+        "name": "Alice",
+        "roles": ["admin", "editor"],
+    }
+})
+
+# .json() serializes to a JSON string; kwargs are forwarded to json.dumps
+print(data.user.json())  # '{"name": "Alice", "roles": ["admin", "editor"]}'
+print(data.user.json(indent=2))  # pretty-printed
+
+# .dict() and .list() return plain, unwrapped containers
+print(data.user.dict())  # {"name": "Alice", "roles": ["admin", "editor"]}
+print(data.user.roles.list())  # ["admin", "editor"]
+```
+
+True to the rest of the library, these never raise on missing or mismatched data. A missing value serializes to JSON `null`, and `.dict()` / `.list()` return an empty container when the data isn't the shape you asked for:
+
+```python
+print(data.missing.json())  # "null"
+print(data.missing.dict())  # {}
+print(data.user.name.list())  # [] — a string isn't list-like
+```
+
 ### Usage: Special values and identity comparisons
 When you access items through a `Chain`, it's not directly returning the value, it's returning a `Chain` wrapping the value.
 A `Chain` is a very powerful and dynamic object that allows all sorts of operations on it, but it's not the same as the raw value.
