@@ -69,6 +69,17 @@ class TestReadmeExamples(unittest.TestCase):
         assert data.user.missing.value(int, default=0) == 0
         assert data.user.role.value(int, default=-1) == -1
 
+    def test_serialization_methods(self):
+        data = Chain({"user": {"name": "Alice", "roles": ["admin", "editor"]}})
+        assert data.user.json() == '{"name": "Alice", "roles": ["admin", "editor"]}'
+        assert data.user.json(indent=2).startswith("{\n")
+        assert data.user.dict() == {"name": "Alice", "roles": ["admin", "editor"]}
+        assert data.user.roles.list() == ["admin", "editor"]
+        # Never raises on missing or mismatched data.
+        assert data.missing.json() == "null"
+        assert data.missing.dict() == {}
+        assert data.user.name.list() == []
+
     def test_identity_comparisons(self):
         data = Chain({"name": "John Doe", "age": 30, "is_active": True})
         # Wrapped values are not the raw values — `is` against True/None fails.
