@@ -4,7 +4,7 @@ import json as _json
 from collections.abc import Callable, Iterator
 from typing import Any, TypeVar, overload
 
-from .sniff import isdictlike, isiterable, islistlike
+from .sniff import isdictlike, isiterable, islistlike, isnestable
 
 T = TypeVar("T")
 
@@ -81,6 +81,29 @@ class Chain:
             return list(self._wrapped)
 
         return []
+
+    def tree(self, *, max_depth: int = 6, max_items: int = 50) -> str:
+        """Render the *shape* of the wrapped data as a terse, copy-pasteable tree.
+
+        Tuned for exploring an unfamiliar payload rather than dumping every
+        value: it shows keys, value types, list lengths, and a sample primitive
+        at each leaf. Lists of dicts show their first element as a representative
+        rather than every item. Deep or wide structures are truncated via
+        ``max_depth`` and ``max_items``.
+
+        Returns the tree as a string, so you typically ``print`` it::
+
+            >>> print(Chain({"user": {"name": "Ada", "age": 36}}).tree())
+            dict
+            └─ user: dict
+               ├─ name: str = 'Ada'
+               └─ age: int = 36
+
+        Never raises on odd input, in keeping with the library's philosophy.
+        """
+        lines: list[str] = []
+        _tree_walk(None, self._wrapped, "", True, True, 0, max_depth, max_items, lines)
+        return "\n".join(lines)
 
     def __str__(self) -> str:
         return str(self._wrapped)
@@ -290,3 +313,91 @@ class Chain:
             return obj._wrapped
 
         return obj
+
+
+def _short_repr(value: Any, limit: int = 40) -> str:
+    """A single-line, length-bounded repr for use as a leaf sample."""
+    text = repr(value)
+    if len(text) > limit:
+        text = text[: limit - 1] + "…"
+    return text
+
+
+def _describe_node(value: Any, depth: int, max_depth: int) -> tuple[str, list[tuple[str, Any]] | None]:
+    """Return a ``(descriptor, children)`` pair for one node.
+
+    ``descriptor`` is the text shown on the node's own line; ``children`` is a
+    list of ``(label, value)`` pairs to recurse into, or ``None`` for a leaf
+    (scalar, empty container, or a container truncated by ``max_depth``).
+    """
+    if value is None:
+        return "None", None
+    # bool is a subclass of int, so it must be checked first.
+    if isinstance(value, bool):
+        return f"bool = {value}", None
+    if isdictlike(value):
+        if len(value) == 0:
+            return "dict (empty)", None
+        if depth >= max_depth:
+            return f"dict {{…}} ({len(value)} keys)", None
+        return "dict", [(str(k), v) for k, v in value.items()]
+    if islistlike(value):
+        items = list(value)
+        count = len(items)
+        if count == 0:
+            return "list[0]", None
+        element_types = {type(item) for item in items}
+        all_scalar = all(not isnestable(item) and item is not None for item in items)
+        if all_scalar and len(element_types) == 1:
+            type_name = next(iter(element_types)).__name__
+            return f"list[{count}] of {type_name} (e.g. {_short_repr(items[0])})", None
+        if depth >= max_depth:
+            return f"list[{count}] [...]", None
+        # Show the first element as a representative of the whole list.
+        return f"list[{count}]", [("[0]", items[0])]
+    if isinstance(value, (int, float)):
+        return f"{type(value).__name__} = {value}", None
+    return f"{type(value).__name__} = {_short_repr(value)}", None
+
+
+def _tree_walk(
+    label: str | None,
+    value: Any,
+    prefix: str,
+    is_last: bool,
+    is_root: bool,
+    depth: int,
+    max_depth: int,
+    max_items: int,
+    lines: list[str],
+) -> None:
+    descriptor, children = _describe_node(value, depth, max_depth)
+    if is_root:
+        # The root has no key, so it renders as just its own descriptor.
+        lines.append(descriptor)
+        child_prefix = ""
+    else:
+        connector = "└─ " if is_last else "├─ "
+        lines.append(f"{prefix}{connector}{label}: {descriptor}")
+        child_prefix = prefix + ("   " if is_last else "│  ")
+
+    if not children:
+        return
+
+    shown = children[:max_items]
+    hidden = len(children) - len(shown)
+    for index, (child_label, child_value) in enumerate(shown):
+        child_is_last = index == len(shown) - 1 and hidden == 0
+        _tree_walk(
+            child_label,
+            child_value,
+            child_prefix,
+            child_is_last,
+            False,
+            depth + 1,
+            max_depth,
+            max_items,
+            lines,
+        )
+    if hidden:
+        lines.append(f"{child_prefix}└─ … (+{hidden} more)")

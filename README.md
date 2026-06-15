@@ -210,6 +210,25 @@ print(data.missing.dict())  # {}
 print(data.user.name.list())  # [] — a string isn't list-like
 ```
 
+### Usage: Inspecting shape with `.tree()`
+When you're handed an unfamiliar payload, print its shape before writing any navigation. `.tree()` shows keys, value types, and list lengths — tuned for exploration rather than dumping every value — and uses the first element as a representative for lists of objects.
+
+```python
+data = Chain({
+    "user": {"name": "Ada", "age": 36},
+    "roles": ["admin", "editor"],
+})
+
+print(data.tree())
+# dict
+# ├─ user: dict
+# │  ├─ name: str = 'Ada'
+# │  └─ age: int = 36
+# └─ roles: list[2] of str (e.g. 'admin')
+```
+
+It returns a string — so you can log it or paste it into a bug report — and never raises. For large payloads, cap the output with `max_depth` and `max_items`. There's also a module-level `daisies.tree(data)` shorthand for when you haven't wrapped your data yet.
+
 ### Usage: Special values and identity comparisons
 When you access items through a `Chain`, it's not directly returning the value, it's returning a `Chain` wrapping the value.
 A `Chain` is a very powerful and dynamic object that allows all sorts of operations on it, but it's not the same as the raw value.
