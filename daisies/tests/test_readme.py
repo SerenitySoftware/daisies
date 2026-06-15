@@ -44,9 +44,16 @@ class TestReadmeExamples(unittest.TestCase):
         assert data.missing / 0 == 0
 
     def test_lists(self):
-        data = Chain({"names": ["Alice", "Bob", "Charlie"]})
+        data = Chain(
+            {
+                "names": ["Alice", "Bob", "Charlie"],
+                "users": [{"name": "Alice"}, {"name": "Bob"}],
+            }
+        )
         assert data.names[0] == "Alice"
         assert data.names[50]() is None
+        # Iterating yields Chains, so nested access keeps working in the loop.
+        assert [user.name.value() for user in data.users] == ["Alice", "Bob"]
 
     def test_nested_dicts(self):
         data = Chain(

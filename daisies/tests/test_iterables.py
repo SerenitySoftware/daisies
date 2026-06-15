@@ -29,6 +29,21 @@ class TestIterables(unittest.TestCase):
         for index, item in enumerate(wrapped):
             assert index + 1 == item
 
+    def test_iteration_yields_wrapped_items(self):
+        # Iterating keeps you in Chain-land, so navigation continues through a
+        # loop without re-wrapping; missing fields inside still resolve to None.
+        data = Chain({"users": [{"name": "Ada"}, {"name": "Bob"}, {}]})
+        for item in data.users:
+            assert isinstance(item, Chain)
+        assert [user.name.value() for user in data.users] == ["Ada", "Bob", None]
+
+    def test_iterated_scalars_compare_equal_to_raw(self):
+        # Wrapped items compare equal to their raw values, so sorted/==/in keep
+        # working unchanged after the wrapping fix.
+        wrapped = Chain([3, 1, 2])
+        assert [item for item in wrapped] == [3, 1, 2]
+        assert sorted(wrapped) == [1, 2, 3]
+
     def test_sets(self):
         assert Chain(set()) == set()
         assert Chain({1, 2, 3}) == {1, 2, 3}

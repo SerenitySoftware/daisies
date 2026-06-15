@@ -121,17 +121,20 @@ print(data.missing / 0)  # 0
 Daisies allows you to work with lists, sets, and other iterables in a natural way.
 You can access items by index and iterate over them. If they don't exist, Daisies will return `None`.
 
+Iterating a `Chain` yields `Chain`-wrapped items, so you can keep navigating each element safely inside the loop — no need to unwrap and re-wrap. Missing fields on an element still resolve to `None` instead of raising.
 
 ```python
 data = Chain({
-    "names": ["Alice", "Bob", "Charlie"]
+    "names": ["Alice", "Bob", "Charlie"],
+    "users": [{"name": "Alice"}, {"name": "Bob"}]
 })
 
 print(data.names[0])  # "Alice"
 print(data.names[50])  # None
 
-for index, name in enumerate(data.names):
-    print(name)
+# Each item is a Chain, so nested access keeps working through the loop:
+for user in data.users:
+    print(user.name)  # "Alice", then "Bob"
 ```
 
 ### Working with dicts and nested data
