@@ -268,5 +268,8 @@ print(data["jeffrey-epstein"])  # "Didn't kill himself"
 ```
 
 
+## Cookbook
+For real-world recipes — parsing a Stripe webhook, walking a paginated REST API, hardening against a flaky third-party service, and exploring an unknown payload with `.tree()` — see the [Cookbook](docs/cookbook.md).
+
 ## Contributing
 Feel free to report bugs and suggest features through GitHub Issues, or open a PR for improvements.
