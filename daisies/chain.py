@@ -115,9 +115,14 @@ class Chain:
 
         return Chain(item)
 
-    def __iter__(self) -> Iterator[Any]:
+    def __iter__(self) -> Iterator[Chain]:
+        # Yield wrapped items so navigation continues through a loop without
+        # re-wrapping (e.g. ``for row in chain.users: row.name``). Wrapped items
+        # still compare equal to their raw values, so ``sorted``/``==``/``in``
+        # keep working. Returning None for non-iterables makes ``iter()`` raise
+        # TypeError just as before (a generator function wouldn't — it defers).
         if isiterable(self._wrapped):
-            return iter(self._wrapped)
+            return (Chain(item) for item in self._wrapped)
 
         return None  # type: ignore[return-value]
 
