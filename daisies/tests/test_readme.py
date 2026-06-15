@@ -87,6 +87,20 @@ class TestReadmeExamples(unittest.TestCase):
         assert data.missing.dict() == {}
         assert data.user.name.list() == []
 
+    def test_tree_shape_inspector(self):
+        data = Chain(
+            {
+                "user": {"name": "Ada", "age": 36},
+                "roles": ["admin", "editor"],
+            }
+        )
+        out = data.tree()
+        assert out.startswith("dict")
+        assert "├─ user: dict" in out
+        assert "│  ├─ name: str = 'Ada'" in out
+        assert "│  └─ age: int = 36" in out
+        assert "└─ roles: list[2] of str (e.g. 'admin')" in out
+
     def test_identity_comparisons(self):
         data = Chain({"name": "John Doe", "age": 30, "is_active": True})
         # Wrapped values are not the raw values — `is` against True/None fails.
