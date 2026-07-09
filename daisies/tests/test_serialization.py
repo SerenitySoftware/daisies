@@ -38,11 +38,23 @@ class TestJson(unittest.TestCase):
         data = Chain({"user": {"name": "Alice", "tags": ["x", "y"]}})
         assert json.loads(data.user.json()) == {"name": "Alice", "tags": ["x", "y"]}
 
-    def test_unserializable_value_raises(self):
-        # Genuinely non-serializable input raises, mirroring json.dumps — the
-        # null-tolerance is about *missing* data, not arbitrary objects.
-        with self.assertRaises(TypeError):
-            Chain({"obj": object()}).json()
+    def test_unserializable_value_stringifies(self):
+        # Never-raise all the way to the door: a value json.dumps doesn't know
+        # (datetime, Decimal, set, an arbitrary object) degrades to its string
+        # form instead of raising TypeError.
+        from datetime import date
+        from decimal import Decimal
+
+        assert Chain({"when": date(2026, 7, 9)}).json() == '{"when": "2026-07-09"}'
+        assert Chain(Decimal("1.5")).json() == '"1.5"'
+        # A bare object() still produces a string rather than blowing up.
+        result = Chain({"obj": object()}).json()
+        assert json.loads(result)["obj"].startswith("<object object")
+
+    def test_default_override_still_wins(self):
+        # The permissive default is only a fallback — an explicit default= wins.
+        result = Chain({"nums": {3, 1, 2}}).json(default=sorted)
+        assert json.loads(result) == {"nums": [1, 2, 3]}
 
 
 class TestDict(unittest.TestCase):

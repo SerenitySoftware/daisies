@@ -12,6 +12,33 @@ class TestIterables(unittest.TestCase):
         assert "nested" in wrapped
         assert "missing" not in wrapped
 
+    def test_keys_values_items_return_plain_lists(self):
+        wrapped = Chain({"a": 1, "b": 2})
+        # Plain lists, not raw dict_keys/dict_values/dict_items views.
+        assert wrapped.keys() == ["a", "b"]
+        assert type(wrapped.keys()) is list
+        assert wrapped.values() == [1, 2]
+        assert type(wrapped.values()) is list
+        assert wrapped.items() == [("a", 1), ("b", 2)]
+        assert type(wrapped.items()) is list
+
+    def test_keys_values_items_are_null_tolerant(self):
+        # A missing node, or a non-dict value, yields [] rather than raising.
+        assert Chain({"a": 1}).missing.keys() == []
+        assert Chain(None).keys() == []
+        assert Chain(None).values() == []
+        assert Chain(None).items() == []
+        assert Chain([1, 2, 3]).keys() == []
+        assert Chain("hi").items() == []
+        # Works several hops deep off an absent path.
+        assert Chain({"user": {}}).user.settings.keys() == []
+
+    def test_data_key_wins_over_proxy(self):
+        # A field literally named items/keys/values still navigates as data;
+        # reach the proxy via the method call on a dict without that key.
+        assert Chain({"items": [55, 8, 59]}).items[1] == 8
+        assert Chain({"keys": {"a": 1}}).keys.a == 1
+
     def test_lists(self):
         wrapped = Chain([1, 2, 3])
         assert wrapped[0] == 1

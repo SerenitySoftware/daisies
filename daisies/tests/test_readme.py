@@ -66,7 +66,7 @@ class TestReadmeExamples(unittest.TestCase):
         )
         assert data.user.name == "Alice"
         assert data.user.address.city == "Wonderland"
-        assert data.this.is_missing() is None
+        assert data.this.that.other() is None
 
     def test_typed_defaults_with_value(self):
         data = Chain({"user": {"role": None, "age": "30"}})
@@ -86,6 +86,24 @@ class TestReadmeExamples(unittest.TestCase):
         assert data.missing.json() == "null"
         assert data.missing.dict() == {}
         assert data.user.name.list() == []
+
+    def test_json_stringifies_unserializable(self):
+        from datetime import date
+
+        assert Chain({"when": date(2026, 7, 9)}).json() == '{"when": "2026-07-09"}'
+
+    def test_dict_views(self):
+        settings = Chain({"user": {"theme": "dark", "lang": "en"}})
+        assert settings.user.keys() == ["theme", "lang"]
+        assert settings.user.values() == ["dark", "en"]
+        assert settings.user.items() == [("theme", "dark"), ("lang", "en")]
+        assert settings.user.missing.keys() == []
+
+    def test_exists_and_is_missing(self):
+        data = Chain({"count": 0})
+        assert data.count.exists() is True
+        assert data.missing.exists() is False
+        assert data.missing.is_missing() is True
 
     def test_tree_shape_inspector(self):
         data = Chain(
