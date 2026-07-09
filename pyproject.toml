@@ -1,6 +1,6 @@
 [project]
 name = "daisies"
-version = "0.2.0"
+version = "0.3.0"
 description = "Python safe navigation for complex objects"
 authors = [
     {name = "Jordan Ambra", email = "jordan@serenity.software"},
