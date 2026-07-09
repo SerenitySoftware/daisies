@@ -8,6 +8,8 @@ from .sniff import isdictlike, isiterable, islistlike, isnestable
 
 T = TypeVar("T")
 
+_MISSING = object()
+
 
 class Chain:
     __slots__ = ("_wrapped",)
@@ -54,10 +56,14 @@ class Chain:
     def json(self, indent: int | None = None, **kwargs: Any) -> str:
         """Serialize the wrapped value to a JSON string.
 
-        A missing or ``None`` wrapped value serializes to ``"null"`` rather
-        than raising. Extra keyword arguments are forwarded to
-        :func:`json.dumps`, so ``chain.json(indent=2, default=str)`` works.
+        Never raises: a missing or ``None`` wrapped value serializes to
+        ``"null"``, and a value :func:`json.dumps` doesn't understand (a
+        ``datetime``, ``Decimal``, ``set``, …) degrades to its string form
+        rather than raising ``TypeError``. Pass your own ``default=`` to
+        override that fallback. Extra keyword arguments are forwarded to
+        :func:`json.dumps`, so ``chain.json(indent=2, sort_keys=True)`` works.
         """
+        kwargs.setdefault("default", str)
         return _json.dumps(self._wrapped, indent=indent, **kwargs)
 
     def dict(self) -> dict[Any, Any]:
@@ -81,6 +87,22 @@ class Chain:
             return list(self._wrapped)
 
         return []
+
+    def exists(self) -> bool:
+        """Return ``True`` when this node resolved to a real value.
+
+        Distinguishes a present-but-falsy value (``0``, ``""``, ``[]``,
+        ``False``) from an absent one — ``data.count.exists()`` is ``True`` for
+        a count of ``0`` but ``False`` when ``count`` was never there — so
+        ``if data.count.exists():`` reads exactly as intended. Because a missing
+        hop is represented as ``None``, a key whose value is literally ``None``
+        reads as missing too.
+        """
+        return self._wrapped is not None
+
+    def is_missing(self) -> bool:
+        """Inverse of :meth:`exists`: ``True`` when the node didn't resolve."""
+        return self._wrapped is None
 
     def tree(self, *, max_depth: int = 6, max_items: int = 50) -> str:
         """Render the *shape* of the wrapped data as a terse, copy-pasteable tree.
@@ -118,10 +140,20 @@ class Chain:
         wrapped = self._wrapped
 
         if isdictlike(wrapped):
-            attr = wrapped.get(name, None)
-            if attr is None and name in ("keys", "items", "values") and hasattr(wrapped, name):
-                attr = getattr(wrapped, name)
-            return Chain(attr)
+            got = wrapped.get(name, _MISSING)
+            if got is not _MISSING:
+                # A data key wins over the keys()/values()/items() proxies, so
+                # `data.items[1]` still navigates a field literally named
+                # "items". Reach a shadowed proxy via the method call instead.
+                return Chain(got)
+            if name in ("keys", "values", "items"):
+                return Chain(lambda: _dict_view(wrapped, name))
+            return Chain(None)
+
+        # keys()/values()/items() stay null-tolerant off a dict: a missing or
+        # non-dict node answers with an empty list rather than raising.
+        if name in ("keys", "values", "items"):
+            return Chain(lambda: _dict_view(wrapped, name))
 
         if wrapped is None:
             return Chain(None)
@@ -313,6 +345,19 @@ class Chain:
             return obj._wrapped
 
         return obj
+
+
+def _dict_view(wrapped: Any, name: str) -> list[Any]:
+    """Return a dict's ``keys``/``values``/``items`` as a plain ``list``.
+
+    Null-tolerant: a value that isn't dict-like (a missing ``None`` node, a
+    string, a list, a scalar) yields ``[]`` instead of raising, so the
+    ``keys()``/``values()``/``items()`` proxies never break a chain.
+    """
+    if isdictlike(wrapped):
+        return list(getattr(wrapped, name)())
+
+    return []
 
 
 def _short_repr(value: Any, limit: int = 40) -> str:

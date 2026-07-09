@@ -210,6 +210,39 @@ print(data.missing.dict())  # {}
 print(data.user.name.list())  # [] — a string isn't list-like
 ```
 
+`.json()` extends that promise to values `json.dumps` doesn't understand — a `datetime`, `Decimal`, or `set` degrades to its string form instead of raising `TypeError`. Pass your own `default=` to override:
+
+```python
+from datetime import date
+
+print(Chain({"when": date(2026, 7, 9)}).json())  # '{"when": "2026-07-09"}'
+```
+
+### Usage: Dict views with `.keys()`, `.values()`, and `.items()`
+Reach a wrapped dict's keys, values, or items as plain lists — null-tolerant, so a missing or non-dict node answers with `[]` instead of raising:
+
+```python
+settings = Chain({"user": {"theme": "dark", "lang": "en"}})
+print(settings.user.keys())    # ["theme", "lang"]
+print(settings.user.values())  # ["dark", "en"]
+print(settings.user.items())   # [("theme", "dark"), ("lang", "en")]
+print(settings.user.missing.keys())  # [] — never raises
+```
+
+A field literally named `keys`/`values`/`items` still wins on attribute access (`data.items[0]` navigates the field); reach the view via the method call on a dict that doesn't have that key.
+
+### Usage: Absent vs. falsy with `.exists()` and `.is_missing()`
+`if data.count:` can't tell a genuine `0` from a missing key. `.exists()` and `.is_missing()` can — a present-but-falsy value (`0`, `""`, `[]`, `False`) exists; an absent one doesn't:
+
+```python
+data = Chain({"count": 0})
+print(data.count.exists())      # True — present, even though it's 0
+print(data.missing.exists())    # False
+print(data.missing.is_missing())  # True
+```
+
+(A key set literally to `None` reads as missing, since a missing hop is itself `None`.)
+
 ### Usage: Inspecting shape with `.tree()`
 When you're handed an unfamiliar payload, print its shape before writing any navigation. `.tree()` shows keys, value types, and list lengths — tuned for exploration rather than dumping every value — and uses the first element as a representative for lists of objects.
 
