@@ -66,7 +66,7 @@ class TestReadmeExamples(unittest.TestCase):
         )
         assert data.user.name == "Alice"
         assert data.user.address.city == "Wonderland"
-        assert data.this.that.other() is None
+        assert data.this.is_missing()
 
     def test_typed_defaults_with_value(self):
         data = Chain({"user": {"role": None, "age": "30"}})

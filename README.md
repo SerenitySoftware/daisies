@@ -182,6 +182,31 @@ print(data.user.role.value(int, default=-1))  # -1
 
 This replaces the common `... or "default"` pattern at the end of a chain. Because the default's type pins the return type, your IDE and type checker can infer it correctly when the chain is annotated.
 
+### Usage: Missing values and `.fallback()`
+Use `.exists()` and `.is_missing()` when you need to distinguish a failed lookup from a value that is present but falsy—or explicitly `None`:
+
+```python
+data = Chain({
+    "user": {"nickname": None},
+    "contact": {"email": "ada@example.com"},
+})
+
+print(data.user.nickname.exists())  # True: the key is present
+print(data.user.email.is_missing())  # True: the key is absent
+```
+
+`.fallback()` chooses another `Chain` or a plain value only when navigation is missing, and keeps the result wrapped:
+
+```python
+email = data.user.email.fallback(data.contact.email).fallback("noreply@example.com")
+print(email)  # "ada@example.com"
+
+# An explicit None is still a resolved value, so it does not fall back.
+print(data.user.nickname.fallback("anonymous").value())  # None
+```
+
+`.value(default=...)` continues to treat both missing values and explicit `None` as reasons to use its terminal default. Use `.fallback()` when the distinction matters.
+
 ### Usage: Getting data back out with `.json()`, `.dict()`, and `.list()`
 Once you've navigated to the part of a payload you care about, you usually want to send it back out — re-serialize it for another API, log it, cache it, or hand it to a template. Daisies gives you three unwrapping methods so you never have to reach for `json.dumps(...)` or the private `._wrapped` attribute.
 

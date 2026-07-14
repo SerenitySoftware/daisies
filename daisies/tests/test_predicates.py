@@ -27,12 +27,10 @@ class TestExistsAndMissing(unittest.TestCase):
         assert data.user.address.city.exists() is False
         assert data.user.address.city.is_missing() is True
 
-    def test_none_valued_key_reads_as_missing(self):
-        # Documented limitation: a key literally set to None can't be told
-        # apart from an absent one, because a missing hop is itself None.
+    def test_none_valued_key_exists(self):
         data = Chain({"middle_name": None})
-        assert data.middle_name.exists() is False
-        assert data.middle_name.is_missing() is True
+        assert data.middle_name.exists() is True
+        assert data.middle_name.is_missing() is False
 
     def test_methods_win_over_keys(self):
         # Same convention as the other methods: a data key named "exists" is

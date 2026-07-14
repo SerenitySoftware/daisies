@@ -4,9 +4,9 @@ Daisies is a small, predictable wrapper for safely reading unreliable nested Pyt
 
 ## Core safe navigation
 
-- [ ] **Distinguish missing values from explicit `None`.** Introduce an internal missing sentinel so a path that did not resolve is different from a key or index whose value is actually `None`. Keep the public, null-tolerant behavior intact while making `.exists()` return `True` for every resolved value—including `None`, `0`, `False`, `""`, and empty containers—and `.is_missing()` return `True` only when navigation failed.
+- [x] **Distinguish missing values from explicit `None`.** Introduce an internal missing sentinel so a path that did not resolve is different from a key or index whose value is actually `None`. Keep the public, null-tolerant behavior intact while making `.exists()` return `True` for every resolved value—including `None`, `0`, `False`, `""`, and empty containers—and `.is_missing()` return `True` only when navigation failed.
 
-- [ ] **`.fallback(...)` for multi-source defaults.** Express “try this path, then that path, then a literal default” fluently: `data.user.email.fallback(data.contact.email).fallback("noreply@example.com")`. Return the current Chain when it resolved, even to an explicit `None`; otherwise return the Chain-wrapped fallback. Accept either another `Chain` or a plain value, never raise, and remain wrapped so navigation can continue.
+- [x] **`.fallback(...)` for multi-source defaults.** Express “try this path, then that path, then a literal default” fluently: `data.user.email.fallback(data.contact.email).fallback("noreply@example.com")`. Return the current Chain when it resolved, even to an explicit `None`; otherwise return the Chain-wrapped fallback. Accept either another `Chain` or a plain value, never raise, and remain wrapped so navigation can continue.
 
 - [ ] **`.pluck(*keys)` for whitelist projection.** Return a Chain-wrapped dictionary containing only the requested keys from the current mapping, silently skipping absent keys. Missing or non-mapping values produce an empty wrapped dictionary. This should compose directly with `.dict()` and `.json()` for small outbound payloads without becoming a general query API.
 

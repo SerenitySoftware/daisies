@@ -12,12 +12,14 @@ _MISSING = object()
 
 
 class Chain:
-    __slots__ = ("_wrapped",)
+    __slots__ = ("_wrapped", "_exists")
 
     _wrapped: Any
+    _exists: bool
 
     def __init__(self, obj: Any = None) -> None:
-        self._wrapped = obj
+        self._exists = obj is not _MISSING
+        self._wrapped = None if obj is _MISSING else obj
 
     def __repr__(self) -> str:
         return repr(self._wrapped)
@@ -89,20 +91,27 @@ class Chain:
         return []
 
     def exists(self) -> bool:
-        """Return ``True`` when this node resolved to a real value.
+        """Return whether navigation resolved to a value.
 
-        Distinguishes a present-but-falsy value (``0``, ``""``, ``[]``,
-        ``False``) from an absent one — ``data.count.exists()`` is ``True`` for
-        a count of ``0`` but ``False`` when ``count`` was never there — so
-        ``if data.count.exists():`` reads exactly as intended. Because a missing
-        hop is represented as ``None``, a key whose value is literally ``None``
-        reads as missing too.
+        Falsy values and an explicit ``None`` still exist. Only a failed key,
+        index, or attribute lookup is missing.
         """
-        return self._wrapped is not None
+        return self._exists
 
     def is_missing(self) -> bool:
-        """Inverse of :meth:`exists`: ``True`` when the node didn't resolve."""
-        return self._wrapped is None
+        """Return whether navigation failed to resolve this node."""
+        return not self._exists
+
+    def fallback(self, fallback: Any) -> Chain:
+        """Use ``fallback`` only when this node is missing.
+
+        The fallback may be another :class:`Chain` or a plain value. The
+        result always remains wrapped so navigation can continue.
+        """
+        if self._exists:
+            return self
+
+        return self.__maybe_wrap(fallback)
 
     def tree(self, *, max_depth: int = 6, max_items: int = 50) -> str:
         """Render the *shape* of the wrapped data as a terse, copy-pasteable tree.
@@ -148,21 +157,21 @@ class Chain:
                 return Chain(got)
             if name in ("keys", "values", "items"):
                 return Chain(lambda: _dict_view(wrapped, name))
-            return Chain(None)
+            return Chain(_MISSING)
 
         # keys()/values()/items() stay null-tolerant off a dict: a missing or
         # non-dict node answers with an empty list rather than raising.
         if name in ("keys", "values", "items"):
             return Chain(lambda: _dict_view(wrapped, name))
 
-        if wrapped is None:
-            return Chain(None)
+        if not self._exists or wrapped is None:
+            return Chain(_MISSING)
 
-        return Chain(getattr(wrapped, name, None))
+        return Chain(getattr(wrapped, name, _MISSING))
 
     def __getitem__(self, key: Any) -> Chain:
-        item = None
-        if self._wrapped and isiterable(self._wrapped):
+        item = _MISSING
+        if self._exists and isiterable(self._wrapped):
             try:
                 item = self._wrapped[key]
             except (KeyError, IndexError):
