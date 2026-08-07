@@ -153,7 +153,7 @@ data = Chain({
 
 print(data.user.name)  # "Alice"
 print(data.user.address.city)  # "Wonderland"
-print(data.this.is.missing)  # None
+print(data.user.phone.number)  # None: a missing path is safe, no KeyError
 ```
 
 
