@@ -119,6 +119,20 @@ class TestReadmeExamples(unittest.TestCase):
         assert "│  └─ age: int = 36" in out
         assert "└─ roles: list[2] of str (e.g. 'admin')" in out
 
+    def test_trace_explains_an_empty_result(self):
+        data = Chain({"user": {"name": "Alice"}})
+        assert data.user.name.trace() == "user.name: resolved"
+        assert data.user.address.trace() == "user.address: missing"
+        assert data.user.address.city.trace() == "user.address.city: missing at user.address"
+
+        data = Chain({"user": {"nickname": None}})
+        assert data.user.nickname.trace() == "user.nickname: resolved (None)"
+        assert data.user.absent.trace() == "user.absent: missing"
+
+        data = Chain({"users": [{"name": "Ada"}, {"name": "Bob"}]})
+        assert data.users[0].name.trace() == "users[0].name: resolved"
+        assert data.users[1].email.trace() == "users[1].email: missing"
+
     def test_identity_comparisons(self):
         data = Chain({"name": "John Doe", "age": 30, "is_active": True})
         # Wrapped values are not the raw values — `is` against True/None fails.

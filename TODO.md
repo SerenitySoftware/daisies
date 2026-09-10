@@ -12,4 +12,4 @@ Daisies is a small, predictable wrapper for safely reading unreliable nested Pyt
 
 ## Debugging safe navigation
 
-- [ ] **`.trace()` for explaining a missing result.** Record and expose the navigation path and the first hop that failed, so `chain.user.address.city.trace()` can explain whether `user`, `address`, or `city` was missing. Keep the result compact and useful in logs, preserve the distinction between a missing hop and an explicit `None`, and avoid changing normal navigation behavior.
+- [x] **`.trace()` for explaining a missing result.** Record and expose the navigation path and the first hop that failed, so `chain.user.address.city.trace()` can explain whether `user`, `address`, or `city` was missing. Keep the result compact and useful in logs, preserve the distinction between a missing hop and an explicit `None`, and avoid changing normal navigation behavior.

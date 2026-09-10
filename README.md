@@ -287,6 +287,43 @@ print(data.tree())
 
 It returns a string — so you can log it or paste it into a bug report — and never raises. For large payloads, cap the output with `max_depth` and `max_items`. There's also a module-level `daisies.tree(data)` shorthand for when you haven't wrapped your data yet.
 
+### Usage: Explaining an empty result with `.trace()`
+Safe navigation has one blind spot: when a chain comes back `None`, it won't tell you *why*. Did the field move? Did the vendor stop sending it? Did you just typo a key? `.trace()` answers that in one line you can drop straight into a log.
+
+```python
+data = Chain({
+    "user": {"name": "Alice"}
+})
+
+print(data.user.name.trace())          # "user.name: resolved"
+print(data.user.address.trace())       # "user.address: missing"
+print(data.user.address.city.trace())  # "user.address.city: missing at user.address"
+```
+
+That last line is the useful one. `city` never had a chance — `address` is the hop that wasn't there, and that's the thing to go fix.
+
+A key that's present but set to `None` is a resolved value, not a missing one, and `.trace()` keeps the two apart:
+
+```python
+data = Chain({
+    "user": {"nickname": None}
+})
+
+print(data.user.nickname.trace())  # "user.nickname: resolved (None)"
+print(data.user.absent.trace())    # "user.absent: missing"
+```
+
+Indexes and bracket lookups read the way you wrote them, including inside a loop, so a bad row in a batch names itself:
+
+```python
+data = Chain({"users": [{"name": "Ada"}, {"name": "Bob"}]})
+
+print(data.users[0].name.trace())  # "users[0].name: resolved"
+print(data.users[1].email.trace())  # "users[1].email: missing"
+```
+
+Tracing only records where navigation went — it never changes what navigation returns.
+
 ### Usage: Special values and identity comparisons
 When you access items through a `Chain`, it's not directly returning the value, it's returning a `Chain` wrapping the value.
 A `Chain` is a very powerful and dynamic object that allows all sorts of operations on it, but it's not the same as the raw value.
