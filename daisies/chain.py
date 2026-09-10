@@ -12,14 +12,21 @@ _MISSING = object()
 
 
 class Chain:
-    __slots__ = ("_wrapped", "_exists")
+    __slots__ = ("_wrapped", "_exists", "_path", "_missed_at")
 
     _wrapped: Any
     _exists: bool
+    _path: tuple[str, ...]
+    _missed_at: tuple[str, ...] | None
 
     def __init__(self, obj: Any = None) -> None:
         self._exists = obj is not _MISSING
         self._wrapped = None if obj is _MISSING else obj
+        # Trace bookkeeping: the steps walked to get here, and the prefix of
+        # those steps that first failed to resolve. Freshly wrapping an object
+        # makes a root — it has walked nowhere and has nothing to explain.
+        self._path = ()
+        self._missed_at = None
 
     def __repr__(self) -> str:
         return repr(self._wrapped)
@@ -113,6 +120,32 @@ class Chain:
 
         return self.__maybe_wrap(fallback)
 
+    def trace(self) -> str:
+        """Explain in one line how navigation got here, and where it stopped.
+
+        Built for dropping straight into a log line when a chain came back
+        empty and you need to know which hop was to blame::
+
+            >>> Chain({"user": {}}).user.address.city.trace()
+            'user.address.city: missing at user.address'
+
+        A node that resolved reports the path it walked instead, and an
+        explicit ``None`` says so, so a key that is present but null stays
+        distinguishable from one that was never there. Tracing is pure
+        bookkeeping and never changes what navigation returns.
+        """
+        path = _render_path(self._path)
+        if self._missed_at == self._path:
+            # The very hop you asked for is the one that failed; naming it
+            # twice would just pad the log line.
+            return f"{path}: missing"
+        if self._missed_at is not None:
+            return f"{path}: missing at {_render_path(self._missed_at)}"
+        if self._wrapped is None:
+            return f"{path}: resolved (None)"
+
+        return f"{path}: resolved"
+
     def tree(self, *, max_depth: int = 6, max_items: int = 50) -> str:
         """Render the *shape* of the wrapped data as a terse, copy-pasteable tree.
 
@@ -142,11 +175,27 @@ class Chain:
     def __hash__(self) -> int:
         return hash(self._wrapped)
 
+    def _navigate(self, step: str, obj: Any) -> Chain:
+        """Wrap the result of one navigation hop, carrying the trace path along.
+
+        The path grows by ``step``, and ``_missed_at`` latches onto the *first*
+        hop that failed, so ``.trace()`` can still name it however far
+        navigation carried on afterwards.
+        """
+        chain = Chain(obj)
+        chain._path = self._path + (step,)
+        chain._missed_at = self._missed_at
+        if chain._missed_at is None and obj is _MISSING:
+            chain._missed_at = chain._path
+
+        return chain
+
     def __getattr__(self, name: str) -> Chain:
         if name.startswith("__") and name.endswith("__"):
             raise AttributeError(name)
 
         wrapped = self._wrapped
+        step = f".{name}"
 
         if isdictlike(wrapped):
             got = wrapped.get(name, _MISSING)
@@ -154,20 +203,20 @@ class Chain:
                 # A data key wins over the keys()/values()/items() proxies, so
                 # `data.items[1]` still navigates a field literally named
                 # "items". Reach a shadowed proxy via the method call instead.
-                return Chain(got)
+                return self._navigate(step, got)
             if name in ("keys", "values", "items"):
-                return Chain(lambda: _dict_view(wrapped, name))
-            return Chain(_MISSING)
+                return self._navigate(step, lambda: _dict_view(wrapped, name))
+            return self._navigate(step, _MISSING)
 
         # keys()/values()/items() stay null-tolerant off a dict: a missing or
         # non-dict node answers with an empty list rather than raising.
         if name in ("keys", "values", "items"):
-            return Chain(lambda: _dict_view(wrapped, name))
+            return self._navigate(step, lambda: _dict_view(wrapped, name))
 
         if not self._exists or wrapped is None:
-            return Chain(_MISSING)
+            return self._navigate(step, _MISSING)
 
-        return Chain(getattr(wrapped, name, _MISSING))
+        return self._navigate(step, getattr(wrapped, name, _MISSING))
 
     def __getitem__(self, key: Any) -> Chain:
         item = _MISSING
@@ -177,7 +226,7 @@ class Chain:
             except (KeyError, IndexError):
                 pass
 
-        return Chain(item)
+        return self._navigate(f"[{key!r}]", item)
 
     def __iter__(self) -> Iterator[Chain]:
         # Yield wrapped items so navigation continues through a loop without
@@ -186,7 +235,7 @@ class Chain:
         # keep working. Returning None for non-iterables makes ``iter()`` raise
         # TypeError just as before (a generator function wouldn't — it defers).
         if isiterable(self._wrapped):
-            return (Chain(item) for item in self._wrapped)
+            return (self._navigate(f"[{index}]", item) for index, item in enumerate(self._wrapped))
 
         return None  # type: ignore[return-value]
 
@@ -367,6 +416,14 @@ def _dict_view(wrapped: Any, name: str) -> list[Any]:
         return list(getattr(wrapped, name)())
 
     return []
+
+
+def _render_path(steps: tuple[str, ...]) -> str:
+    """Render recorded navigation steps the way you would have written them."""
+    if not steps:
+        return "<root>"
+
+    return "".join(steps).removeprefix(".")
 
 
 def _short_repr(value: Any, limit: int = 40) -> str:

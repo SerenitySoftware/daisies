@@ -117,3 +117,33 @@ class TestTreeRecipe(unittest.TestCase):
 
     def test_module_level_shorthand(self):
         assert tree({"a": 1}) == "dict\n└─ a: int = 1"
+
+
+class TestTraceRecipe(unittest.TestCase):
+    """Mirrors docs/cookbook.md -> Explaining an empty result with .trace()."""
+
+    def test_recipe(self):
+        payload = {
+            "user": {"name": "Ada"},
+            "billing": {"address": {"city": "Austin"}},
+        }
+        order = Chain(payload)
+        city = order.user.address.city
+
+        assert city.is_missing()
+        assert city.trace() == "user.address.city: missing at user.address"
+        assert order.billing.address.city.trace() == "billing.address.city: resolved"
+
+    def test_an_explicit_null_reads_differently_from_an_absent_field(self):
+        account = Chain({"user": {"name": "Ada", "nickname": None}})
+
+        assert account.user.nickname.trace() == "user.nickname: resolved (None)"
+        assert account.user.email.trace() == "user.email: missing"
+
+    def test_a_bad_row_in_a_batch_names_itself(self):
+        rows = Chain({"users": [{"name": "Ada"}, {"name": "Bob"}]})
+
+        assert [user.email.trace() for user in rows.users] == [
+            "users[0].email: missing",
+            "users[1].email: missing",
+        ]

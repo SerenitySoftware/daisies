@@ -12,6 +12,7 @@ silently drift away from the implementation.
 - [Walking a paginated REST response](#walking-a-paginated-rest-response)
 - [Hardening against a flaky third-party API](#hardening-against-a-flaky-third-party-api)
 - [Exploring an unknown payload with `.tree()`](#exploring-an-unknown-payload-with-tree)
+- [Explaining an empty result with `.trace()`](#explaining-an-empty-result-with-trace)
 
 
 ## Parsing a Stripe webhook
@@ -183,3 +184,61 @@ print(tree(huge_payload, max_depth=2, max_items=10))
 Wide levels are truncated with a `… (+N more)` line, and branches past
 `max_depth` collapse to `dict {…}` / `list[N] [...]` so the overall shape stays
 on one screen.
+
+
+## Explaining an empty result with `.trace()`
+
+Every recipe above leans on the same promise: a missing path resolves to `None`
+instead of raising. The bill for that promise comes due the day a chain quietly
+returns nothing and you have to work out whether the vendor dropped a field,
+moved it, or you typed the key wrong. `.trace()` settles it in one loggable
+line.
+
+```python
+from daisies import Chain
+
+# Yesterday this endpoint nested the address under "user". Today it doesn't.
+payload = {
+    "user": {"name": "Ada"},
+    "billing": {"address": {"city": "Austin"}},
+}
+
+order = Chain(payload)
+city = order.user.address.city
+
+print(city.is_missing())  # True — but missing *where*?
+print(city.trace())       # "user.address.city: missing at user.address"
+```
+
+`missing at user.address` is the whole diagnosis: `user` was fine, `city` never
+got a chance, and `address` is the hop that moved. Point the chain at its new
+home and the trace confirms the fix:
+
+```python
+print(order.billing.address.city.trace())  # "billing.address.city: resolved"
+```
+
+A field a vendor explicitly nulls out is a different problem from one they
+stopped sending — one is data, the other is a broken integration. `.trace()`
+keeps them apart:
+
+```python
+account = Chain({"user": {"name": "Ada", "nickname": None}})
+
+print(account.user.nickname.trace())  # "user.nickname: resolved (None)"
+print(account.user.email.trace())     # "user.email: missing"
+```
+
+Indexes are recorded too, including the one you're on mid-loop, so a bad row in
+a batch names itself instead of hiding in an aggregate:
+
+```python
+rows = Chain({"users": [{"name": "Ada"}, {"name": "Bob"}]})
+
+print([user.email.trace() for user in rows.users])
+# ['users[0].email: missing', 'users[1].email: missing']
+```
+
+Tracing is pure bookkeeping: it records where navigation went and never changes
+what it returns, so it costs you nothing to read a trace in the log line you
+were already writing.
