@@ -18,21 +18,22 @@ jobs:
   build:
     name: Build distribution
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Install Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Install Poetry
-        uses: abatilo/actions-poetry@v2
+        uses: abatilo/actions-poetry@v4
         with:
-          poetry-version: "2.3.4"
+          poetry-version: "2.4.3"
       - name: Build sdist + wheel
         run: poetry build
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -42,6 +43,7 @@ jobs:
     needs: build
     if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: testpypi
       url: https://test.pypi.org/p/daisies
@@ -49,7 +51,7 @@ jobs:
       id-token: write
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -63,6 +65,7 @@ jobs:
     needs: build
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: pypi
       url: https://pypi.org/p/daisies
@@ -70,7 +73,7 @@ jobs:
       id-token: write
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
