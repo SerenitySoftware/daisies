@@ -120,6 +120,35 @@ class Chain:
 
         return self.__maybe_wrap(fallback)
 
+    def pluck(self, *keys: Any) -> Chain:
+        """Return a wrapped dict of just ``keys``, skipping the ones that aren't there.
+
+        A whitelist projection for building a small outbound payload out of a
+        big, untrusted one::
+
+            >>> Chain({"id": 7, "email": "a@b.c", "secret": "x"}).pluck("id", "email").dict()
+            {'id': 7, 'email': 'a@b.c'}
+
+        Keys come back in the order you asked for them. A key that is absent is
+        skipped silently rather than filled in with ``None``, so a present-but-
+        null field stays distinguishable from one that was never sent. In
+        keeping with the never-raise philosophy, a missing node or a value that
+        isn't dict-like plucks to an empty dict. The result stays wrapped, so it
+        composes straight into ``.dict()``, ``.json()``, or further navigation.
+        """
+        source = self.dict()
+        picked: dict[Any, Any] = {}
+        for key in keys:
+            try:
+                if key in source:
+                    picked[key] = source[key]
+            except TypeError:
+                # An unhashable key can never be in a mapping. Skipping it keeps
+                # the promise that navigation never raises at the caller.
+                continue
+
+        return self._navigate(f".pluck({', '.join(repr(key) for key in keys)})", picked)
+
     def trace(self) -> str:
         """Explain in one line how navigation got here, and where it stopped.
 

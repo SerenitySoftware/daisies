@@ -11,6 +11,7 @@ silently drift away from the implementation.
 - [Parsing a Stripe webhook](#parsing-a-stripe-webhook)
 - [Walking a paginated REST response](#walking-a-paginated-rest-response)
 - [Hardening against a flaky third-party API](#hardening-against-a-flaky-third-party-api)
+- [Forwarding only what you're allowed to share](#forwarding-only-what-youre-allowed-to-share)
 - [Exploring an unknown payload with `.tree()`](#exploring-an-unknown-payload-with-tree)
 - [Explaining an empty result with `.trace()`](#explaining-an-empty-result-with-trace)
 
@@ -136,6 +137,42 @@ tomorrow_high = weather.forecast.tomorrow.high_f.value(int, default=0)  # 0
 
 # Arithmetic tolerates the gaps too — a missing number coerces to zero:
 total_alerts = weather.alerts.count + 5                      # 5
+```
+
+
+## Forwarding only what you're allowed to share
+
+An upstream payload arrives with far more in it than the next system should
+see. Rather than deleting keys from a copy — and rediscovering every time the
+vendor adds a new one — name the handful you *do* want with `.pluck()` and
+serialize that.
+
+```python
+from daisies import Chain
+
+raw = {
+    "id": "usr_88121",
+    "email": "ada@example.com",
+    "display_name": None,          # the vendor sends this key, sometimes null
+    "ssn": "000-00-0000",          # never ours to forward
+    "internal": {"risk_score": 0.92, "notes": "flagged"},
+}
+
+user = Chain(raw)
+
+# Only the whitelist goes out. Anything the vendor adds later is excluded by
+# default, because the projection names what's allowed rather than what isn't.
+payload = user.pluck("id", "email", "display_name")
+
+print(payload.json())
+# '{"id": "usr_88121", "email": "ada@example.com", "display_name": null}'
+
+# A key that simply wasn't sent is left out rather than padded with null, so
+# the receiver can tell "unset" from "explicitly cleared":
+print(user.pluck("id", "phone").dict())  # {"id": "usr_88121"}
+
+# And it composes with the rest of navigation — trim a nested object the same way:
+print(user.internal.pluck("risk_score").dict())  # {"risk_score": 0.92}
 ```
 
 

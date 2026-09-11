@@ -92,6 +92,34 @@ class TestFlakyApiRecipe(unittest.TestCase):
         assert weather.alerts.count + 5 == 5
 
 
+class TestForwardingWhitelistRecipe(unittest.TestCase):
+    """Mirrors docs/cookbook.md -> Forwarding only what you're allowed to share."""
+
+    def setUp(self):
+        self.raw = {
+            "id": "usr_88121",
+            "email": "ada@example.com",
+            "display_name": None,
+            "ssn": "000-00-0000",
+            "internal": {"risk_score": 0.92, "notes": "flagged"},
+        }
+
+    def test_only_the_whitelist_is_serialized(self):
+        user = Chain(self.raw)
+        payload = user.pluck("id", "email", "display_name")
+        assert payload.json() == '{"id": "usr_88121", "email": "ada@example.com", "display_name": null}'
+        assert "ssn" not in payload.dict()
+        assert "internal" not in payload.dict()
+
+    def test_absent_key_is_left_out_rather_than_nulled(self):
+        user = Chain(self.raw)
+        assert user.pluck("id", "phone").dict() == {"id": "usr_88121"}
+
+    def test_composes_with_navigation(self):
+        user = Chain(self.raw)
+        assert user.internal.pluck("risk_score").dict() == {"risk_score": 0.92}
+
+
 class TestTreeRecipe(unittest.TestCase):
     """Mirrors docs/cookbook.md -> Exploring an unknown payload with .tree()."""
 
