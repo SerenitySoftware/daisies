@@ -8,7 +8,7 @@ Daisies is a small, predictable wrapper for safely reading unreliable nested Pyt
 
 - [x] **`.fallback(...)` for multi-source defaults.** Express “try this path, then that path, then a literal default” fluently: `data.user.email.fallback(data.contact.email).fallback("noreply@example.com")`. Return the current Chain when it resolved, even to an explicit `None`; otherwise return the Chain-wrapped fallback. Accept either another `Chain` or a plain value, never raise, and remain wrapped so navigation can continue.
 
-- [ ] **`.pluck(*keys)` for whitelist projection.** Return a Chain-wrapped dictionary containing only the requested keys from the current mapping, silently skipping absent keys. Missing or non-mapping values produce an empty wrapped dictionary. This should compose directly with `.dict()` and `.json()` for small outbound payloads without becoming a general query API.
+- [x] **`.pluck(*keys)` for whitelist projection.** Return a Chain-wrapped dictionary containing only the requested keys from the current mapping, silently skipping absent keys. Missing or non-mapping values produce an empty wrapped dictionary. This should compose directly with `.dict()` and `.json()` for small outbound payloads without becoming a general query API.
 
 ## Debugging safe navigation
 

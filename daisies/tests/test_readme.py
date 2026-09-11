@@ -133,6 +133,22 @@ class TestReadmeExamples(unittest.TestCase):
         assert data.users[0].name.trace() == "users[0].name: resolved"
         assert data.users[1].email.trace() == "users[1].email: missing"
 
+    def test_pluck_trims_a_payload(self):
+        customer = Chain(
+            {
+                "id": 42,
+                "email": "ada@example.com",
+                "internal_notes": "do not share",
+                "card_token": "tok_secret",
+            }
+        )
+        assert customer.pluck("id", "email").dict() == {"id": 42, "email": "ada@example.com"}
+        assert customer.pluck("id", "email").json() == '{"id": 42, "email": "ada@example.com"}'
+        # Absent keys are left out; an explicit null is kept.
+        assert customer.pluck("id", "nickname").dict() == {"id": 42}
+        assert Chain({"nickname": None}).pluck("nickname").dict() == {"nickname": None}
+        assert customer.missing.pluck("id").dict() == {}
+
     def test_identity_comparisons(self):
         data = Chain({"name": "John Doe", "age": 30, "is_active": True})
         # Wrapped values are not the raw values — `is` against True/None fails.

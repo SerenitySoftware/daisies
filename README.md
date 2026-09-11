@@ -243,6 +243,31 @@ from datetime import date
 print(Chain({"when": date(2026, 7, 9)}).json())  # '{"when": "2026-07-09"}'
 ```
 
+### Usage: Trimming a payload with `.pluck()`
+Third-party payloads are usually much bigger than the part you're allowed to pass along. `.pluck()` picks out just the keys you name, so you can hand a trimmed, predictable object to the next system instead of forwarding whatever arrived:
+
+```python
+customer = Chain({
+    "id": 42,
+    "email": "ada@example.com",
+    "internal_notes": "do not share",
+    "card_token": "tok_secret",
+})
+
+print(customer.pluck("id", "email").dict())  # {"id": 42, "email": "ada@example.com"}
+print(customer.pluck("id", "email").json())  # '{"id": 42, "email": "ada@example.com"}'
+```
+
+Keys come back in the order you asked for them, and a key that isn't there is simply left out rather than filled in with `None` — so a field the sender explicitly nulled still shows up, and one that was never sent doesn't. Like everything else in Daisies, it never raises: a missing node, or a value that isn't a dict at all, plucks to an empty dict.
+
+```python
+print(customer.pluck("id", "nickname").dict())  # {"id": 42} — "nickname" wasn't sent
+print(Chain({"nickname": None}).pluck("nickname").dict())  # {"nickname": None} — sent as null
+print(customer.missing.pluck("id").dict())  # {}
+```
+
+The result is still a Chain, so you can keep navigating it or hand it straight to `.dict()` or `.json()`.
+
 ### Usage: Dict views with `.keys()`, `.values()`, and `.items()`
 Reach a wrapped dict's keys, values, or items as plain lists — null-tolerant, so a missing or non-dict node answers with `[]` instead of raising:
 
@@ -364,7 +389,7 @@ print(data["jeffrey-epstein"])  # "Didn't kill himself"
 
 
 ## Cookbook
-For real-world recipes — parsing a Stripe webhook, walking a paginated REST API, hardening against a flaky third-party service, and exploring an unknown payload with `.tree()` — see the [Cookbook](docs/cookbook.md).
+For real-world recipes — parsing a Stripe webhook, walking a paginated REST API, hardening against a flaky third-party service, forwarding only the fields you're allowed to share, and exploring an unknown payload with `.tree()` — see the [Cookbook](docs/cookbook.md).
 
 ## Contributing
 Feel free to report bugs and suggest features through GitHub Issues, or open a PR for improvements.
