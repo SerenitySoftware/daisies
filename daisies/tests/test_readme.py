@@ -40,9 +40,7 @@ class TestReadmeExamples(unittest.TestCase):
         assert data.price * data.quantity == 500
         assert data.missing + 10 == 10
         assert data.quantity**3 == 125
-        # Note: README says `data.missing / 0` returns None, but the
-        # implementation (and existing tests) returns 0. This documents
-        # the actual behavior — the README needs a small correction.
+        # Division by zero coerces to 0 rather than raising, as the README says.
         assert data.missing / 0 == 0
 
     def test_lists(self):
