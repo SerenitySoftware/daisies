@@ -1,4 +1,5 @@
 import unittest
+from collections import Counter
 
 import daisies
 from daisies import Chain, MissingPathError
@@ -241,3 +242,41 @@ class TestReadmeStrictMode(unittest.TestCase):
             assert Chain({"user": {}}, strict=False).user.emial.value() is None
 
         assert payload.user.emial.value() is None
+
+
+class TestReadmeOnMissing(unittest.TestCase):
+    """Mirrors README.md -> Usage: Watching for fields that disappear with on_missing()."""
+
+    def test_a_failed_hop_reaches_the_observer(self):
+        seen = []
+
+        with daisies.on_missing(seen.append):
+            Chain({"user": {"name": "Ada"}}).user.email.value()
+
+        assert seen == ["user.email"]
+
+    def test_misses_group_under_the_same_key_so_they_count(self):
+        misses = Counter()
+
+        with daisies.on_missing(lambda path: misses.update([path])):
+            data = Chain({"users": [{"id": 1}, {"id": 2}]})
+            for row in data.users:
+                row.email.value()
+
+        assert misses == Counter({"users[0].email": 1, "users[1].email": 1})
+
+    def test_only_the_first_failure_in_a_chain_fires(self):
+        seen = []
+
+        with daisies.on_missing(seen.append):
+            Chain({"user": {}}).user.address.city.value()
+
+        assert seen == ["user.address"]
+
+    def test_the_scoped_registration_example(self):
+        seen = []
+
+        with daisies.on_missing(seen.append):
+            Chain({"user": {}}).user.email.value()
+
+        assert seen == ["user.email"]

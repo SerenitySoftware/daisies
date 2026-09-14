@@ -18,6 +18,10 @@ _UNSET = object()
 # the thread — or the async task — that opened it.
 _STRICT: ContextVar[bool] = ContextVar("daisies_strict", default=False)
 
+# The observer notified whenever a hop fails to resolve. Also a ContextVar, so
+# a test can scope one to itself without disturbing a process-wide registration.
+_ON_MISSING: ContextVar[Callable[[str], Any] | None] = ContextVar("daisies_on_missing", default=None)
+
 
 class MissingPathError(Exception):
     """Raised in strict mode when a value that never resolved is unwrapped.
@@ -45,6 +49,71 @@ def strict() -> Iterator[None]:
         yield
     finally:
         _STRICT.reset(token)
+
+
+class _MissingObserver:
+    """The handle :func:`on_missing` hands back. See there for what it does."""
+
+    __slots__ = ("_token",)
+
+    def __init__(self, callback: Callable[[str], Any] | None) -> None:
+        self._token = _ON_MISSING.set(callback)
+
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, *exc_info: Any) -> None:
+        _ON_MISSING.reset(self._token)
+
+
+def on_missing(callback: Callable[[str], Any] | None) -> _MissingObserver:
+    """Call ``callback`` with the path of every hop that fails to resolve.
+
+    Daisies survives a field the vendor stopped sending by returning ``None``
+    — which also means nobody finds out. This is the signal: register once at
+    startup and every miss becomes a countable, loggable event naming the
+    field that went away::
+
+        daisies.on_missing(lambda path: metrics.increment("daisies.missing", path))
+
+    The callback receives the failing hop as a string in the same notation
+    :meth:`Chain.trace` uses (``"user.address"``, ``"users[3].email"``), so the
+    same path always groups together. Only the *first* failure in a chain fires
+    — ``data.user.address.city`` with no ``address`` reports ``user.address``
+    once, not three misses for one absent field.
+
+    Strictly observational: it never changes what navigation returns, anything
+    the callback raises is swallowed rather than surfacing at the call site,
+    and a callback that navigates missing data itself won't re-enter. When no
+    observer is registered the cost is a single context lookup per miss.
+
+    Pass ``None`` to unregister. The return value can be used as a context
+    manager to scope the registration instead, restoring the previous observer
+    on the way out::
+
+        with daisies.on_missing(seen.append):
+            ...
+    """
+    return _MissingObserver(callback)
+
+
+def _notify_missing(path: tuple[str, ...]) -> None:
+    """Hand one failed hop to the registered observer, if there is one."""
+    callback = _ON_MISSING.get()
+    if callback is None:
+        return
+
+    # Muting the observer for the duration keeps a callback that navigates
+    # missing data of its own from calling itself back.
+    token = _ON_MISSING.set(None)
+    try:
+        callback(_render_path(path))
+    except Exception:
+        # An observer is a bystander; a broken one must not break the data
+        # access it was watching.
+        pass
+    finally:
+        _ON_MISSING.reset(token)
 
 
 class Chain:
@@ -292,6 +361,7 @@ class Chain:
         chain._missed_at = self._missed_at
         if chain._missed_at is None and obj is _MISSING:
             chain._missed_at = chain._path
+            _notify_missing(chain._path)
 
         return chain
 
