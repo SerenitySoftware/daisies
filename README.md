@@ -349,6 +349,56 @@ print(data.users[1].email.trace())  # "users[1].email: missing"
 
 Tracing only records where navigation went — it never changes what navigation returns.
 
+### Usage: Watching for fields that disappear with `on_missing()`
+Daisies surviving a field the vendor stopped sending is the point — but it also means nobody finds out. `daisies.on_missing()` turns that silent degradation into a signal: register a callback once and every failed hop becomes a countable, loggable event naming the field that went away.
+
+```python
+import daisies
+from daisies import Chain
+
+daisies.on_missing(lambda path: print(f"missing: {path}"))
+
+data = Chain({"user": {"name": "Ada"}})
+data.user.email.value()  # prints "missing: user.email"
+```
+
+The path arrives as a string in the same notation `.trace()` uses, so the same absent field always groups under the same key — exactly what you want for a counter:
+
+```python
+from collections import Counter
+
+misses = Counter()
+daisies.on_missing(lambda path: misses.update([path]))
+
+data = Chain({"users": [{"id": 1}, {"id": 2}]})
+for row in data.users:
+    row.email.value()
+
+# Indexed rows name themselves, so a bad row in a batch stays attributable:
+print(misses)  # Counter({'users[0].email': 1, 'users[1].email': 1})
+```
+
+Only the *first* failure in a chain fires. `data.user.address.city` with no `address` reports `user.address` once, not three misses for one absent field — you get the field that actually vanished, not the fallout.
+
+The observer is a bystander and behaves like one:
+
+- It never changes what navigation returns.
+- Anything the callback raises is swallowed rather than surfacing at the call site, so a broken metric can't break a data read.
+- A callback that navigates missing data itself won't call itself back.
+- An explicit `None` is a value the vendor sent, not a field that vanished, so it reports nothing.
+- With no observer registered, a miss costs one context lookup.
+
+Pass `None` to unregister. The return value works as a context manager if you'd rather scope the registration — handy in tests — and restores whatever was registered before it:
+
+```python
+seen = []
+
+with daisies.on_missing(seen.append):
+    Chain({"user": {}}).user.email.value()
+
+assert seen == ["user.email"]
+```
+
 ### Usage: Catching your own typos with strict mode
 Never raising is the whole point of Daisies — but it means a *typo* looks exactly like a field the vendor didn't send. `data.user.emial` quietly comes back `None`, and nothing tells you until the wrong thing ships.
 

@@ -1,8 +1,8 @@
-__all__ = ["Chain", "MissingPathError", "strict", "tree"]
+__all__ = ["Chain", "MissingPathError", "on_missing", "strict", "tree"]
 
 from typing import Any
 
-from .chain import Chain, MissingPathError, strict
+from .chain import Chain, MissingPathError, on_missing, strict
 
 
 def tree(data: Any, *, max_depth: int = 6, max_items: int = 50) -> str:
