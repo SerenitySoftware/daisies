@@ -349,6 +349,61 @@ print(data.users[1].email.trace())  # "users[1].email: missing"
 
 Tracing only records where navigation went — it never changes what navigation returns.
 
+### Usage: Catching your own typos with strict mode
+Never raising is the whole point of Daisies — but it means a *typo* looks exactly like a field the vendor didn't send. `data.user.emial` quietly comes back `None`, and nothing tells you until the wrong thing ships.
+
+Strict mode is the opt-in fix: same navigation code, but unwrapping a path that never resolved raises `MissingPathError` instead of handing you a `None`. Turn it on in your tests and leave it off in production — fail fast on your own mistakes, stay null-tolerant about the vendor's.
+
+```python
+from daisies import Chain, MissingPathError
+
+data = Chain({"user": {"email": "ada@example.com"}}, strict=True)
+
+print(data.user.email.value())  # "ada@example.com" — resolved, so nothing changes
+print(data.user.emial.value())  # raises MissingPathError: user.emial: missing
+```
+
+The error message is the same one-liner `.trace()` gives you, so it names the hop that actually failed, not just the path you asked for:
+
+```python
+data = Chain({"user": {}}, strict=True)
+
+data.user.address.city.value()  # MissingPathError: user.address.city: missing at user.address
+```
+
+Strictness follows the data. Every chain you navigate off a strict one is strict too, all the way down through keys, indexes, loops, and `.pluck()`.
+
+#### Telling Daisies you meant it
+An absence you've explicitly handled isn't a mistake, so strict mode leaves it alone. Naming a default — or a fallback — is how you say the field is allowed to be missing:
+
+```python
+data = Chain({"user": {}}, strict=True)
+
+print(data.user.email.value(default="noreply@example.com"))  # "noreply@example.com"
+print(data.user.email.fallback("anonymous").value())         # "anonymous"
+
+# Asking whether it's there is never a mistake either:
+print(data.user.email.exists())      # False
+print(data.user.email.is_missing())  # True
+print(data.user.email.trace())       # "user.email: missing"
+```
+
+Only *unwrapping* is refused — `.value()` with no default, calling the chain, `.dict()`, `.list()`, `.json()`, and `.pluck()`. Navigating through a missing hop is still fine, and an explicit `None` is a resolved value, so a field the vendor deliberately nulled out never raises.
+
+#### Turning it on for code you didn't wrap
+When the `Chain` is built somewhere you don't control — a fixture, a client library, a helper — use the `daisies.strict()` context manager instead of the constructor flag:
+
+```python
+import daisies
+
+payload = load_fixture()  # a Chain somebody else made
+
+with daisies.strict():
+    payload.user.emial.value()  # raises MissingPathError
+```
+
+The region covers the current thread (or async task) and restores whatever was in force when it exits, so a single `with daisies.strict():` in a pytest fixture makes a whole test suite strict. A chain built with an explicit `Chain(raw, strict=False)` opts back out of it.
+
 ### Usage: Special values and identity comparisons
 When you access items through a `Chain`, it's not directly returning the value, it's returning a `Chain` wrapping the value.
 A `Chain` is a very powerful and dynamic object that allows all sorts of operations on it, but it's not the same as the raw value.

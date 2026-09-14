@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json as _json
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any, TypeVar, overload
 
 from .sniff import isdictlike, isiterable, islistlike, isnestable
@@ -9,17 +11,52 @@ from .sniff import isdictlike, isiterable, islistlike, isnestable
 T = TypeVar("T")
 
 _MISSING = object()
+_UNSET = object()
+
+# Ambient strictness, for code that navigates data it did not wrap itself.
+# A ContextVar rather than a module global so a strict region stays confined to
+# the thread — or the async task — that opened it.
+_STRICT: ContextVar[bool] = ContextVar("daisies_strict", default=False)
+
+
+class MissingPathError(Exception):
+    """Raised in strict mode when a value that never resolved is unwrapped.
+
+    The message is the offending chain's :meth:`Chain.trace`, so it names both
+    the path you asked for and the hop that actually failed.
+    """
+
+
+@contextmanager
+def strict() -> Iterator[None]:
+    """Navigate strictly for the duration of the block.
+
+    Every :class:`Chain` that hasn't pinned its own mode reads this, so it
+    works on data someone else wrapped::
+
+        with daisies.strict():
+            payload.user.emial.value()  # raises MissingPathError
+
+    Reentrant and scoped to the current thread or async task; leaving the
+    block restores whatever was in force before it.
+    """
+    token = _STRICT.set(True)
+    try:
+        yield
+    finally:
+        _STRICT.reset(token)
 
 
 class Chain:
-    __slots__ = ("_wrapped", "_exists", "_path", "_missed_at")
+    __slots__ = ("_wrapped", "_exists", "_path", "_missed_at", "_strict")
 
     _wrapped: Any
     _exists: bool
     _path: tuple[str, ...]
     _missed_at: tuple[str, ...] | None
+    _strict: bool | None
 
-    def __init__(self, obj: Any = None) -> None:
+    def __init__(self, obj: Any = None, *, strict: bool | None = None) -> None:
         self._exists = obj is not _MISSING
         self._wrapped = None if obj is _MISSING else obj
         # Trace bookkeeping: the steps walked to get here, and the prefix of
@@ -27,11 +64,29 @@ class Chain:
         # makes a root — it has walked nowhere and has nothing to explain.
         self._path = ()
         self._missed_at = None
+        # None pins nothing and defers to the ambient ``daisies.strict()``
+        # region, if any; True or False pin this chain either way.
+        self._strict = strict
+
+    def _fail_if_strict(self) -> None:
+        """Refuse to hand back a stand-in for a hop that never resolved.
+
+        Only unwrapping goes through here. Navigation itself stays silent so a
+        strict chain behaves identically right up to the moment it would have
+        quietly substituted ``None``, ``{}``, ``[]``, or ``"null"``.
+        """
+        if self._exists:
+            return
+
+        strict_here = _STRICT.get() if self._strict is None else self._strict
+        if strict_here:
+            raise MissingPathError(self.trace())
 
     def __repr__(self) -> str:
         return repr(self._wrapped)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        self._fail_if_strict()
         if callable(self._wrapped):
             return self._wrapped(*args, **kwargs)
 
@@ -50,8 +105,17 @@ class Chain:
         self,
         type_: Callable[[Any], Any] | None = None,
         *,
-        default: Any = None,
+        default: Any = _UNSET,
     ) -> Any:
+        """Unwrap the value, optionally coercing it and defaulting the gaps.
+
+        Naming a ``default`` is how you say an absence is expected, so it is
+        honoured even in strict mode; asking for the bare value in a strict
+        region raises :class:`MissingPathError` instead.
+        """
+        if default is _UNSET:
+            self._fail_if_strict()
+            default = None
         wrapped = self._wrapped
         if wrapped is None:
             return default
@@ -72,6 +136,7 @@ class Chain:
         override that fallback. Extra keyword arguments are forwarded to
         :func:`json.dumps`, so ``chain.json(indent=2, sort_keys=True)`` works.
         """
+        self._fail_if_strict()
         kwargs.setdefault("default", str)
         return _json.dumps(self._wrapped, indent=indent, **kwargs)
 
@@ -81,6 +146,7 @@ class Chain:
         Returns an empty dict when the wrapped value isn't dict-like, keeping
         with the library's never-raise philosophy.
         """
+        self._fail_if_strict()
         if isdictlike(self._wrapped):
             return dict(self._wrapped)
 
@@ -92,6 +158,7 @@ class Chain:
         Returns an empty list when the wrapped value isn't list-like — strings
         and dicts don't count — keeping with the never-raise philosophy.
         """
+        self._fail_if_strict()
         if islistlike(self._wrapped):
             return list(self._wrapped)
 
@@ -118,7 +185,14 @@ class Chain:
         if self._exists:
             return self
 
-        return self.__maybe_wrap(fallback)
+        if isinstance(fallback, Chain):
+            return fallback
+
+        replacement = Chain(fallback)
+        # A literal fallback is a fresh root with no path to report, but it is
+        # still part of this navigation, so it keeps the mode it was pinned to.
+        replacement._strict = self._strict
+        return replacement
 
     def pluck(self, *keys: Any) -> Chain:
         """Return a wrapped dict of just ``keys``, skipping the ones that aren't there.
@@ -133,8 +207,10 @@ class Chain:
         skipped silently rather than filled in with ``None``, so a present-but-
         null field stays distinguishable from one that was never sent. In
         keeping with the never-raise philosophy, a missing node or a value that
-        isn't dict-like plucks to an empty dict. The result stays wrapped, so it
-        composes straight into ``.dict()``, ``.json()``, or further navigation.
+        isn't dict-like plucks to an empty dict — in a strict region, plucking
+        off a hop that never resolved raises instead. The result stays wrapped,
+        so it composes straight into ``.dict()``, ``.json()``, or further
+        navigation.
         """
         source = self.dict()
         picked: dict[Any, Any] = {}
@@ -211,7 +287,7 @@ class Chain:
         hop that failed, so ``.trace()`` can still name it however far
         navigation carried on afterwards.
         """
-        chain = Chain(obj)
+        chain = Chain(obj, strict=self._strict)
         chain._path = self._path + (step,)
         chain._missed_at = self._missed_at
         if chain._missed_at is None and obj is _MISSING:

@@ -1,6 +1,7 @@
 import unittest
 
-from daisies import Chain
+import daisies
+from daisies import Chain, MissingPathError
 
 
 class TestReadmeExamples(unittest.TestCase):
@@ -201,3 +202,42 @@ class TestEdgeCases(unittest.TestCase):
         nested = Chain(Chain(5))
         assert nested == 5
         assert nested + 3 == 8
+
+
+class TestReadmeStrictMode(unittest.TestCase):
+    """Mirrors README.md -> Usage: Catching your own typos with strict mode."""
+
+    def test_a_typo_raises_while_a_real_field_resolves(self):
+        data = Chain({"user": {"email": "ada@example.com"}}, strict=True)
+
+        assert data.user.email.value() == "ada@example.com"
+        with self.assertRaises(MissingPathError) as caught:
+            data.user.emial.value()
+        assert str(caught.exception) == "user.emial: missing"
+
+    def test_the_message_names_the_hop_that_failed(self):
+        data = Chain({"user": {}}, strict=True)
+
+        with self.assertRaises(MissingPathError) as caught:
+            data.user.address.city.value()
+        assert str(caught.exception) == "user.address.city: missing at user.address"
+
+    def test_an_explicitly_handled_absence_is_left_alone(self):
+        data = Chain({"user": {}}, strict=True)
+
+        assert data.user.email.value(default="noreply@example.com") == "noreply@example.com"
+        assert data.user.email.fallback("anonymous").value() == "anonymous"
+        assert data.user.email.exists() is False
+        assert data.user.email.is_missing() is True
+        assert data.user.email.trace() == "user.email: missing"
+
+    def test_the_context_manager_covers_a_chain_someone_else_wrapped(self):
+        payload = Chain({"user": {}})
+
+        with daisies.strict():
+            with self.assertRaises(MissingPathError):
+                payload.user.emial.value()
+            # An explicitly tolerant chain opts back out of the region.
+            assert Chain({"user": {}}, strict=False).user.emial.value() is None
+
+        assert payload.user.emial.value() is None
