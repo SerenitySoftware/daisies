@@ -13,6 +13,17 @@ T = TypeVar("T")
 _MISSING = object()
 _UNSET = object()
 
+# What a coercion callable raises when the value it got is the wrong shape for
+# it. ValueError alone is not enough: Decimal("abc") raises
+# decimal.InvalidOperation (an ArithmeticError), int(float("inf")) raises
+# OverflowError, and a callable that reaches into the value — v["amount"],
+# v.isoformat() — raises LookupError or AttributeError. Those are all "the
+# vendor sent something else", which is exactly what Daisies absorbs.
+# Deliberately not a bare Exception: a genuine bug inside a coercion callable
+# (a NameError, a RecursionError) should still surface rather than quietly
+# turning into the default.
+_COERCION_FAILURES = (TypeError, ValueError, ArithmeticError, LookupError, AttributeError)
+
 # Ambient strictness, for code that navigates data it did not wrap itself.
 # A ContextVar rather than a module global so a strict region stays confined to
 # the thread — or the async task — that opened it.
@@ -181,6 +192,9 @@ class Chain:
         Naming a ``default`` is how you say an absence is expected, so it is
         honoured even in strict mode; asking for the bare value in a strict
         region raises :class:`MissingPathError` instead.
+
+        A coercion that fails falls back the same way a missing hop does — see
+        :data:`_COERCION_FAILURES` for what counts as a failure.
         """
         if default is _UNSET:
             self._fail_if_strict()
@@ -192,7 +206,7 @@ class Chain:
             return wrapped
         try:
             return type_(wrapped)
-        except (TypeError, ValueError):
+        except _COERCION_FAILURES:
             return default
 
     def json(self, indent: int | None = None, **kwargs: Any) -> str:

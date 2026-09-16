@@ -161,6 +161,8 @@ print(data.user.phone.number)  # None: a missing path is safe, no KeyError
 For most uses, calling a Chain with `()` is enough to unwrap it. But when you want a fallback for missing data — or you want to coerce the value to a particular type — use `.value()`:
 
 ```python
+from decimal import Decimal
+
 data = Chain({
     "user": {
         "role": None,
@@ -178,7 +180,10 @@ print(data.user.missing.value(int, default=0))  # 0
 
 # Coercion failures fall back too — never raises
 print(data.user.role.value(int, default=-1))  # -1
+print(Chain({"amt": "n/a"}).amt.value(Decimal, default=Decimal("0")))  # Decimal('0')
 ```
+
+"Never raises" here means whatever the sender put in the field: text where you expected a number, a number too big to fit, a dict where you expected a date. You get your default back instead of an exception. The one thing it won't hide is a bug in your own conversion function — if that breaks, you'll hear about it.
 
 This replaces the common `... or "default"` pattern at the end of a chain. Because the default's type pins the return type, your IDE and type checker can infer it correctly when the chain is annotated.
 
