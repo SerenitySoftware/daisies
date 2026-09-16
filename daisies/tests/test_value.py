@@ -96,6 +96,41 @@ class TestValueWithCoercion(unittest.TestCase):
         assert Chain("not a float").value(float) is None
 
 
+class TestValueCoercionNeverRaises(unittest.TestCase):
+    """Every way a coercion can reject the value falls back instead of raising.
+
+    `ValueError`/`TypeError` are only two of the families: `Decimal("abc")`
+    raises `decimal.InvalidOperation`, an `ArithmeticError`.
+    """
+
+    def test_decimal_conversion_failure_falls_back(self):
+        assert Chain({"amt": "abc"}).amt.value(Decimal, default=Decimal("0")) == Decimal("0")
+        assert Chain("abc").value(Decimal) is None
+
+    def test_overflow_falls_back(self):
+        assert Chain(float("inf")).value(int, default=0) == 0
+
+    def test_zero_division_falls_back(self):
+        assert Chain(0).value(lambda v: 100 / v, default=-1) == -1
+
+    def test_lookup_failure_falls_back(self):
+        assert Chain({"a": 1}).value(lambda v: v["b"], default="none") == "none"
+        assert Chain([]).value(lambda v: v[0], default="none") == "none"
+
+    def test_attribute_failure_falls_back(self):
+        # A date-shaped coercion applied to the string the vendor actually sent.
+        assert Chain("2026-09-16").value(lambda v: v.isoformat(), default="n/a") == "n/a"
+
+    def test_bug_in_coercion_callable_still_surfaces(self):
+        # Absorbing a wrong-shaped value is the promise; hiding a broken
+        # callable is not. A programming error propagates as usual.
+        def broken(_value):
+            raise RuntimeError("boom")
+
+        with self.assertRaises(RuntimeError):
+            Chain("42").value(broken, default=0)
+
+
 class TestValueWithCoercionAndDefault(unittest.TestCase):
     """`.value(type_, default=X)` coerces, falling back to X on missing or coercion failure."""
 

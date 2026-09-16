@@ -1,5 +1,6 @@
 import unittest
 from collections import Counter
+from decimal import Decimal
 
 import daisies
 from daisies import Chain, MissingPathError
@@ -75,6 +76,7 @@ class TestReadmeExamples(unittest.TestCase):
         assert data.user.age.value(int, default=0) == 30
         assert data.user.missing.value(int, default=0) == 0
         assert data.user.role.value(int, default=-1) == -1
+        assert Chain({"amt": "n/a"}).amt.value(Decimal, default=Decimal("0")) == Decimal("0")
 
     def test_serialization_methods(self):
         data = Chain({"user": {"name": "Alice", "roles": ["admin", "editor"]}})
