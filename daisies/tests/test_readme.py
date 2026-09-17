@@ -165,6 +165,11 @@ class TestReadmeExamples(unittest.TestCase):
         assert data["123"] == "Hello World!"
         assert data["jeffrey-epstein"] == "Didn't kill himself"
 
+    def test_brackets_are_as_forgiving_as_the_dots(self):
+        weather = Chain({"current": {"wind": []}})
+        assert weather.current["wind"]["speed_mph"]() is None
+        assert weather.current["wind"]["speed_mph"].trace() == "current['wind']['speed_mph']: missing"
+
 
 class TestEdgeCases(unittest.TestCase):
     """Behaviors that work but aren't covered elsewhere."""

@@ -412,7 +412,13 @@ class Chain:
         if self._exists and isiterable(self._wrapped):
             try:
                 item = self._wrapped[key]
-            except (KeyError, IndexError):
+            except (KeyError, IndexError, TypeError):
+                # TypeError is the wrong-container case, not a wrong-key one:
+                # a string key on a list or a string, a float index, an
+                # unhashable key. That is the same "the vendor sent a different
+                # shape" family _COERCION_FAILURES absorbs, and the dotted form
+                # of the same path already resolves to None, so bracket lookup
+                # records it as a missed hop rather than raising at the caller.
                 pass
 
         return self._navigate(f"[{key!r}]", item)

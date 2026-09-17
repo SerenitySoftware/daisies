@@ -58,3 +58,22 @@ class TestNavigation(unittest.TestCase):
         # being intercepted into Chain(None) and recursing.
         with self.assertRaises(AttributeError):
             Chain({"a": 1}).__nonexistent_dunder__
+
+    def test_item_access_wrong_key_type(self):
+        # Bracket lookup is the documented route for reserved and non-identifier
+        # keys, so it has to absorb a wrong-shaped container the same way dotted
+        # access does — the day the vendor sends a list where a dict was
+        # promised, `data.users["name"]` must not raise.
+        data = Chain({"users": [{"name": "Ada"}], "title": "hello"})
+        assert data.users["name"]() is None
+        assert data.title["name"]() is None
+        assert data.users[1.5]() is None
+
+    def test_item_access_unhashable_key(self):
+        assert Chain({"a": 1})[["a"]]() is None
+
+    def test_item_access_wrong_key_type_records_the_miss(self):
+        data = Chain({"current": {"wind": []}})
+        node = data.current["wind"]["speed_mph"]
+        assert node.is_missing()
+        assert node.trace() == "current['wind']['speed_mph']: missing"
