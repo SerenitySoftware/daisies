@@ -90,6 +90,13 @@ class TestFlakyApiRecipe(unittest.TestCase):
         assert weather.current.wind.speed_mph.value(float, default=0.0) == 0.0
         assert weather.forecast.tomorrow.high_f.value(int, default=0) == 0
         assert weather.alerts.count + 5 == 5
+        assert weather.current["wind"]["speed_mph"].value(float, default=0.0) == 0.0
+
+    def test_brackets_survive_the_container_changing_shape(self):
+        # The day "wind" comes back as a list instead of an object.
+        weather = Chain({"current": {"wind": []}})
+
+        assert weather.current["wind"]["speed_mph"].value(float, default=0.0) == 0.0
 
 
 class TestForwardingWhitelistRecipe(unittest.TestCase):

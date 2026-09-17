@@ -497,6 +497,19 @@ print(data.jeffrey-epstein)  # SyntaxError :(
 print(data["jeffrey-epstein"])  # "Didn't kill himself"
 ```
 
+Square brackets are as forgiving as the dots. Asking for a name on something
+that turned out to be a list, or a string, or a number — the sort of surprise a
+third party springs on you — comes back `None` rather than blowing up, and the
+miss is recorded so `.trace()` and `on_missing` can name it:
+
+```python
+weather = Chain({"current": {"wind": []}})  # the API usually sends a dict here
+
+print(weather.current["wind"]["speed_mph"])  # None, not TypeError
+print(weather.current["wind"]["speed_mph"].trace())
+# current['wind']['speed_mph']: missing
+```
+
 
 ## Cookbook
 For real-world recipes — parsing a Stripe webhook, walking a paginated REST API, hardening against a flaky third-party service, forwarding only the fields you're allowed to share, and exploring an unknown payload with `.tree()` — see the [Cookbook](docs/cookbook.md).

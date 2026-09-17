@@ -137,6 +137,10 @@ tomorrow_high = weather.forecast.tomorrow.high_f.value(int, default=0)  # 0
 
 # Arithmetic tolerates the gaps too — a missing number coerces to zero:
 total_alerts = weather.alerts.count + 5                      # 5
+
+# Brackets are just as safe, even when the shape changes underneath you —
+# this still gives 0.0 on the day "wind" arrives as [] instead of {}:
+wind_mph = weather.current["wind"]["speed_mph"].value(float, default=0.0)
 ```
 
 
