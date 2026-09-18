@@ -107,6 +107,16 @@ class TestReadmeExamples(unittest.TestCase):
         assert data.missing.exists() is False
         assert data.missing.is_missing() is True
 
+        # A key the sender set literally to None is a value they sent, so it
+        # exists; only a key that never arrived is missing. The README said the
+        # opposite until 2026-09-18 — it was written before the missing
+        # sentinel landed and nothing here contradicted it.
+        nulled = Chain({"nickname": None})
+        assert nulled.nickname.exists() is True
+        assert nulled.nickname.is_missing() is False
+        # ...while .value(default=...) still covers both, as the same section says.
+        assert nulled.nickname.value(default="anon") == "anon"
+
     def test_tree_shape_inspector(self):
         data = Chain(
             {

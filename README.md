@@ -296,7 +296,9 @@ print(data.missing.exists())    # False
 print(data.missing.is_missing())  # True
 ```
 
-(A key set literally to `None` reads as missing, since a missing hop is itself `None`.)
+(A key the sender set literally to `None` is still a value they sent, so it *exists*; only a key
+that never arrived is missing. `.value(default=...)` treats both as reasons to use its default —
+reach for `.exists()` or `.fallback()` when you need to tell the two apart.)
 
 ### Usage: Inspecting shape with `.tree()`
 When you're handed an unfamiliar payload, print its shape before writing any navigation. `.tree()` shows keys, value types, and list lengths — tuned for exploration rather than dumping every value — and uses the first element as a representative for lists of objects.
