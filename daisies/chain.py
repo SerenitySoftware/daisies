@@ -24,6 +24,10 @@ _UNSET = object()
 # turning into the default.
 _COERCION_FAILURES = (TypeError, ValueError, ArithmeticError, LookupError, AttributeError)
 
+# The only key types json.dumps will take. Anything else raises TypeError, and
+# its `default=` hook is never consulted for keys — see _json_safe.
+_JSON_KEY_TYPES = (str, int, float, bool, type(None))
+
 # Ambient strictness, for code that navigates data it did not wrap itself.
 # A ContextVar rather than a module global so a strict region stays confined to
 # the thread — or the async task — that opened it.
@@ -216,12 +220,22 @@ class Chain:
         ``"null"``, and a value :func:`json.dumps` doesn't understand (a
         ``datetime``, ``Decimal``, ``set``, …) degrades to its string form
         rather than raising ``TypeError``. Pass your own ``default=`` to
-        override that fallback. Extra keyword arguments are forwarded to
+        override that fallback. A dict *key* of one of those types degrades
+        the same way — see :func:`_json_safe`, which also covers data that
+        refers back to itself. Extra keyword arguments are forwarded to
         :func:`json.dumps`, so ``chain.json(indent=2, sort_keys=True)`` works.
         """
         self._fail_if_strict()
         kwargs.setdefault("default", str)
-        return _json.dumps(self._wrapped, indent=indent, **kwargs)
+        try:
+            return _json.dumps(self._wrapped, indent=indent, **kwargs)
+        except (TypeError, ValueError):
+            # Two shapes refuse to serialize before `default=` ever gets a
+            # look in: a key that isn't a string or number, and data that
+            # refers back to itself. Repairing those and trying once more
+            # keeps the promise at the door while costing the ordinary
+            # payload nothing.
+            return _json.dumps(_json_safe(self._wrapped), indent=indent, **kwargs)
 
     def dict(self) -> dict[Any, Any]:
         """Return the wrapped value as a plain ``dict``.
@@ -598,6 +612,40 @@ class Chain:
             return obj._wrapped
 
         return obj
+
+
+def _json_safe(value: Any, seen: frozenset[int] = frozenset()) -> Any:
+    """Rebuild ``value`` into something :func:`json.dumps` will accept.
+
+    Only the two shapes ``dumps`` rejects outright are rewritten. A dict key
+    that isn't a string, number, bool, or ``None`` becomes its string form —
+    the same degradation ``default=str`` already gives an unserializable
+    *value*, so a ``date`` reads as ``"2026-07-09"`` on either side of the
+    colon. A container that contains itself becomes its string form too,
+    rather than the ``ValueError`` ``dumps`` raises for a circular reference;
+    tracking the containers on the way down is also what stops this walk from
+    recursing forever on that data.
+
+    Everything else is passed straight through, so a caller's own ``default=``
+    still sees exactly the values it would have seen.
+    """
+    if id(value) in seen:
+        return str(value)
+
+    # Only dict/list/tuple, because those are precisely what dumps recurses
+    # into itself; any other container is a value its `default=` handles.
+    if isinstance(value, dict):
+        nested = seen | {id(value)}
+        return {
+            (key if isinstance(key, _JSON_KEY_TYPES) else str(key)): _json_safe(item, nested)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, (list, tuple)):
+        nested = seen | {id(value)}
+        return [_json_safe(item, nested) for item in value]
+
+    return value
 
 
 def _dict_view(wrapped: Any, name: str) -> list[Any]:

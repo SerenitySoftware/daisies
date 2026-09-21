@@ -56,6 +56,54 @@ class TestJson(unittest.TestCase):
         result = Chain({"nums": {3, 1, 2}}).json(default=sorted)
         assert json.loads(result) == {"nums": [1, 2, 3]}
 
+    def test_unserializable_key_stringifies(self):
+        # The same promise on the other side of the colon: json.dumps takes
+        # only str/int/float/bool/None as keys and its default= hook is never
+        # consulted for them, so a date key used to raise TypeError while the
+        # identical date as a *value* degraded to "2026-07-09".
+        from datetime import date
+        from decimal import Decimal
+
+        assert Chain({date(2026, 7, 9): "a"}).json() == '{"2026-07-09": "a"}'
+        assert Chain({Decimal("1.5"): "a"}).json() == '{"1.5": "a"}'
+        assert Chain({(1, 2): "a"}).json() == '{"(1, 2)": "a"}'
+
+    def test_unserializable_key_stringifies_at_any_depth(self):
+        # The bad key is usually buried, not at the root.
+        from datetime import date
+
+        data = Chain({"by_day": [{date(2026, 7, 9): 3}]})
+        assert json.loads(data.json()) == {"by_day": [{"2026-07-09": 3}]}
+
+    def test_ordinary_keys_are_untouched(self):
+        # Rewriting keys must not disturb the ones dumps already accepts.
+        serialized = Chain({"a": 1, 2: "b", True: "c", None: "d"}).json()
+        assert serialized == '{"a": 1, "2": "b", "true": "c", "null": "d"}'
+
+    def test_skipkeys_still_wins(self):
+        # An explicit skipkeys=True asks for the key to be dropped; dumps
+        # never raises then, so the repair path never runs and the caller's
+        # choice stands.
+        from datetime import date
+
+        assert Chain({date(2026, 7, 9): "a", "ok": 1}).json(skipkeys=True) == '{"ok": 1}'
+
+    def test_self_referential_data_stringifies(self):
+        # Data that refers back to itself makes dumps raise ValueError, which
+        # default= cannot intercept either. It degrades to its string form
+        # rather than escaping to the caller.
+        node = {"name": "root"}
+        node["self"] = node
+
+        assert json.loads(Chain(node).json())["self"].startswith("{'name': 'root'")
+
+    def test_default_still_sees_unserializable_values_on_the_repair_path(self):
+        # Repairing keys must not swallow the caller's default= for values.
+        from datetime import date
+
+        result = Chain({date(2026, 7, 9): {3, 1, 2}}).json(default=sorted)
+        assert json.loads(result) == {"2026-07-09": [1, 2, 3]}
+
 
 class TestDict(unittest.TestCase):
     """`.dict()` returns the wrapped value as a plain dict, or `{}`."""

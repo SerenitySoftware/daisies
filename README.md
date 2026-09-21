@@ -248,6 +248,12 @@ from datetime import date
 print(Chain({"when": date(2026, 7, 9)}).json())  # '{"when": "2026-07-09"}'
 ```
 
+That holds on either side of the colon. JSON only allows text keys, so a dictionary keyed by dates, `Decimal`s, UUIDs, or tuples — the sort you get from grouping records in Python rather than from parsing JSON — degrades its keys to the same string form instead of raising:
+
+```python
+print(Chain({date(2026, 7, 9): 12}).json())  # '{"2026-07-09": 12}'
+```
+
 ### Usage: Trimming a payload with `.pluck()`
 Third-party payloads are usually much bigger than the part you're allowed to pass along. `.pluck()` picks out just the keys you name, so you can hand a trimmed, predictable object to the next system instead of forwarding whatever arrived:
 

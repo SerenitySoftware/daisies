@@ -94,6 +94,12 @@ class TestReadmeExamples(unittest.TestCase):
 
         assert Chain({"when": date(2026, 7, 9)}).json() == '{"when": "2026-07-09"}'
 
+    def test_json_stringifies_unserializable_keys(self):
+        # "That holds on either side of the colon."
+        from datetime import date
+
+        assert Chain({date(2026, 7, 9): 12}).json() == '{"2026-07-09": 12}'
+
     def test_dict_views(self):
         settings = Chain({"user": {"theme": "dark", "lang": "en"}})
         assert settings.user.keys() == ["theme", "lang"]
