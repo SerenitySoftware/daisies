@@ -39,6 +39,20 @@ class TestIterables(unittest.TestCase):
         assert Chain({"items": [55, 8, 59]}).items[1] == 8
         assert Chain({"keys": {"a": 1}}).keys.a == 1
 
+    def test_an_attribute_wins_over_the_proxy_on_a_plain_object(self):
+        # Same rule as a data key on a dict: the real field is the answer, and
+        # the proxy only fills in for a name the value doesn't have.
+        class Index:
+            def __init__(self):
+                self.keys = ["a", "b"]
+                self.values = [1, 2]
+
+        index = Index()
+        assert Chain(index).keys.list() == ["a", "b"]
+        assert Chain(index).values.list() == [1, 2]
+        # No `items` attribute on it, so that one still answers as a view.
+        assert Chain(index).items() == []
+
     def test_lists(self):
         wrapped = Chain([1, 2, 3])
         assert wrapped[0] == 1

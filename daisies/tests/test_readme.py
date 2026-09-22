@@ -203,6 +203,21 @@ class TestEdgeCases(unittest.TestCase):
         assert c.shout() == "HI"
         assert c.missing() is None
 
+    def test_an_objects_own_items_attribute_wins_over_the_view(self):
+        # README, dict views: "The same holds for a plain object: an order
+        # whose `items` attribute holds its line items navigates to those
+        # line items."
+        class Order:
+            def __init__(self):
+                self.id = 41
+                self.items = [{"sku": "A1"}, {"sku": "B2"}]
+
+        order = Chain(Order())
+        assert order.items[0].sku == "A1"
+        assert order.id == 41
+        # An object without such an attribute still gets the null-tolerant view.
+        assert Chain(Order()).keys() == []
+
     def test_tuple_indexing(self):
         c = Chain((10, 20, 30))
         assert c[0] == 10
