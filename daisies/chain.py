@@ -411,15 +411,21 @@ class Chain:
                 return self._navigate(step, lambda: _dict_view(wrapped, name))
             return self._navigate(step, _MISSING)
 
-        # keys()/values()/items() stay null-tolerant off a dict: a missing or
-        # non-dict node answers with an empty list rather than raising.
+        if self._exists and wrapped is not None:
+            got = getattr(wrapped, name, _MISSING)
+            if got is not _MISSING:
+                # A real attribute wins over the keys()/values()/items()
+                # proxies just as a data key does above, so an object with a
+                # field named `items` navigates to the field.
+                return self._navigate(step, got)
+
+        # keys()/values()/items() stay null-tolerant off anything else: a
+        # missing node, a None, or a value that has no such attribute answers
+        # with an empty list rather than raising.
         if name in ("keys", "values", "items"):
             return self._navigate(step, lambda: _dict_view(wrapped, name))
 
-        if not self._exists or wrapped is None:
-            return self._navigate(step, _MISSING)
-
-        return self._navigate(step, getattr(wrapped, name, _MISSING))
+        return self._navigate(step, _MISSING)
 
     def __getitem__(self, key: Any) -> Chain:
         item = _MISSING

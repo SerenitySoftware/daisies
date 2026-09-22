@@ -44,6 +44,35 @@ class TestNavigation(unittest.TestCase):
         assert Chain([1, 2, 3]).index(2) == 1
         assert Chain({"name": "John"}).name.upper() == "JOHN"
 
+    def test_object_with_an_items_attribute_still_navigates(self):
+        # `items` is the most ordinary name a cart, order, or page object has,
+        # and the dict-like sniff used to accept any object that merely *had*
+        # the attribute — so every hop on one raised instead of navigating.
+        class Cart:
+            def __init__(self):
+                self.id = 7
+                self.items = [{"sku": "A1"}, {"sku": "B2"}]
+
+        cart = Cart()
+        assert Chain(cart).id == 7
+        assert Chain(cart).missing() is None
+        assert Chain({"cart": cart}).cart.id == 7
+        # The field itself wins over the keys()/values()/items() proxy, the
+        # same way a data key does on a dict.
+        assert Chain(cart).items[1].sku == "B2"
+        assert Chain(cart).items.list() == [{"sku": "A1"}, {"sku": "B2"}]
+
+    def test_object_with_an_items_attribute_keeps_the_never_raise_promise(self):
+        class Order:
+            def __init__(self):
+                self.items = ["widget"]
+
+        order = Order()
+        # Not dict-like, so `.dict()` answers with its documented empty dict…
+        assert Chain(order).dict() == {}
+        # …and `.tree()` describes it as the object it is rather than raising.
+        assert Chain(order).tree().startswith("Order = <")
+
     def test_attribute_missing_on_wrapped(self):
         assert Chain("hello").nonexistent() is None
         assert Chain([1, 2, 3]).does_not_exist() is None

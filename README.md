@@ -290,7 +290,7 @@ print(settings.user.items())   # [("theme", "dark"), ("lang", "en")]
 print(settings.user.missing.keys())  # [] — never raises
 ```
 
-A field literally named `keys`/`values`/`items` still wins on attribute access (`data.items[0]` navigates the field); reach the view via the method call on a dict that doesn't have that key.
+A field literally named `keys`/`values`/`items` still wins on attribute access (`data.items[0]` navigates the field); reach the view via the method call on a dict that doesn't have that key. The same holds for a plain object: an order whose `items` attribute holds its line items navigates to those line items.
 
 ### Usage: Absent vs. falsy with `.exists()` and `.is_missing()`
 `if data.count:` can't tell a genuine `0` from a missing key. `.exists()` and `.is_missing()` can — a present-but-falsy value (`0`, `""`, `[]`, `False`) exists; an absent one doesn't:
