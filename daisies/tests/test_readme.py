@@ -40,6 +40,8 @@ class TestReadmeExamples(unittest.TestCase):
         data = Chain({"price": 100, "quantity": 5})
         assert data.price * data.quantity == 500
         assert data.missing + 10 == 10
+        assert data.price - data.missing == 100
+        assert data.missing - data.price == -100
         assert data.quantity**3 == 125
         # Division by zero coerces to 0 rather than raising, as the README says.
         assert data.missing / 0 == 0

@@ -110,6 +110,7 @@ data = Chain({
 
 print(data.price * data.quantity)  # 500
 print(data.missing + 10)  # 10
+print(data.price - data.missing)  # 100: a missing field counts as nothing on either side
 print(data.quantity ** 3)  # 125
 
 # Chain even allows division by zero, returning 0 instead.

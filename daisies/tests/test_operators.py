@@ -81,6 +81,24 @@ class TestNavigation(unittest.TestCase):
         assert Chain(4) // Chain(3) == 1
         assert Chain(5) // 0 == 0
 
+    def test_missing_right_operand(self):
+        # A missing field on the right reads as None, exactly as it does on
+        # the left: `100 + data.missing` is 100, so `data.price + data.missing`
+        # is too, rather than `100 + None` raising TypeError.
+        data = Chain({"price": 100, "discount": 3})
+        assert data.price + data.missing == 100
+        assert data.price - data.missing == 100
+        assert data.price**data.missing == 0
+        assert data.price + None == 100
+        assert data.price - None == 100
+        assert Chain("hello") + Chain(None) == "hello"
+
+    def test_missing_left_operand_minus_a_chain(self):
+        data = Chain({"price": 100, "discount": 3})
+        assert data.missing - data.discount == -3
+        assert data.missing - data.nothing == None  # noqa: E711
+        assert data.missing + data.nothing == None  # noqa: E711
+
 
 class TestReflectedOperators(unittest.TestCase):
     """Operators where the Chain is on the right-hand side: `1 + Chain(2)`."""

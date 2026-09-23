@@ -507,13 +507,21 @@ class Chain:
         if self._wrapped is None:
             return self.__maybe_wrap(other)
 
-        return Chain(self._wrapped + self.__maybe_unwrap(other))
+        other = self.__maybe_unwrap(other)
+        if other is None:
+            return Chain(self._wrapped)
+
+        return Chain(self._wrapped + other)
 
     def __sub__(self, other: Any) -> Chain:
+        other = self.__maybe_unwrap(other)
         if self._wrapped is None:
-            return self.__maybe_wrap(-other)
+            return Chain(None if other is None else -other)
 
-        return Chain(self._wrapped - self.__maybe_unwrap(other))
+        if other is None:
+            return Chain(self._wrapped)
+
+        return Chain(self._wrapped - other)
 
     def __mul__(self, other: Any) -> Chain:
         if self._wrapped is None or not other:
@@ -540,7 +548,7 @@ class Chain:
         return Chain(self._wrapped % self.__maybe_unwrap(other))
 
     def __pow__(self, other: Any) -> Chain:
-        if self._wrapped is None:
+        if self._wrapped is None or self.__maybe_unwrap(other) is None:
             return Chain(0)
 
         return Chain(self._wrapped ** self.__maybe_unwrap(other))
