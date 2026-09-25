@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json as _json
+import keyword
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -376,6 +377,31 @@ class Chain:
 
     def __hash__(self) -> int:
         return hash(self._wrapped)
+
+    def __dir__(self) -> list[str]:
+        # What `data.user.<TAB>` offers in a REPL or notebook: the Chain's own
+        # methods plus whatever the wrapped value would let dotted navigation
+        # reach. Introspection only — nothing in navigation consults this.
+        names = set(object.__dir__(self))
+        wrapped = self._wrapped
+
+        try:
+            if isdictlike(wrapped):
+                # Only keys the dot can actually spell. "jeffrey-epstein",
+                # "123", and "class" stay with the bracket form.
+                names.update(
+                    key
+                    for key in wrapped.keys()
+                    if isinstance(key, str) and key.isidentifier() and not keyword.iskeyword(key)
+                )
+            elif self._exists and wrapped is not None:
+                names.update(dir(wrapped))
+        except Exception:
+            # A partial mapping without keys(), or an object whose own __dir__
+            # raises: completion just offers less, it never breaks the REPL.
+            pass
+
+        return sorted(names)
 
     def _navigate(self, step: str, obj: Any) -> Chain:
         """Wrap the result of one navigation hop, carrying the trace path along.

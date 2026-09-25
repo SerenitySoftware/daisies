@@ -326,6 +326,8 @@ print(data.tree())
 
 It returns a string — so you can log it or paste it into a bug report — and never raises. For large payloads, cap the output with `max_depth` and `max_items`. There's also a module-level `daisies.tree(data)` shorthand for when you haven't wrapped your data yet.
 
+Tab completion knows the payload too: in the Python REPL, IPython, or Jupyter, typing `data.user.` and pressing Tab offers the keys of `user` (and an object's attributes) alongside Daisies' own methods. Keys you can't write after a dot, like `"jeffrey-epstein"` or `"class"`, are left out — reach those with square brackets.
+
 ### Usage: Explaining an empty result with `.trace()`
 Safe navigation has one blind spot: when a chain comes back `None`, it won't tell you *why*. Did the field move? Did the vendor stop sending it? Did you just typo a key? `.trace()` answers that in one line you can drop straight into a log.
 
