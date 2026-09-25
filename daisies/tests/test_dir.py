@@ -12,8 +12,7 @@ class Account:
 
 class Row:
     # A partial mapping: items() and nothing else, so it has no keys().
-    def items(self):
-        return {"a": 1}.items()
+    items = {"a": 1}.items
 
 
 class Hostile:
