@@ -131,6 +131,62 @@ class TestValueCoercionNeverRaises(unittest.TestCase):
             Chain("42").value(broken, default=0)
 
 
+class TestValueRejectsNonCallableType(unittest.TestCase):
+    """A positional default — `.value("guest")` — is a bug, not a shape the data arrived in.
+
+    `"guest"(wrapped)` raises `TypeError`, which `_COERCION_FAILURES` would
+    otherwise swallow into the implicit `None` default, losing a present value
+    and never applying the intended default. Refuse it up front instead.
+    """
+
+    def assert_rejects(self, chain, type_):
+        with self.assertRaises(TypeError) as caught:
+            chain.value(type_)
+        message = str(caught.exception)
+        assert message == (
+            f".value() takes a callable to coerce with, got {type_!r}; "
+            f"to supply a default write .value(default={type_!r})"
+        )
+
+    def test_string_on_present_value_raises(self):
+        self.assert_rejects(Chain({"user": {"name": "Ada"}}).user.name, "Unknown")
+
+    def test_int_on_present_value_raises(self):
+        self.assert_rejects(Chain({"user": {"age": 30}}).user.age, 0)
+
+    def test_string_and_int_on_none_wrapped_value_raise(self):
+        self.assert_rejects(Chain({"role": None}).role, "guest")
+        self.assert_rejects(Chain(None), 0)
+
+    def test_string_and_int_on_missing_node_raise(self):
+        # A missing node would otherwise make the slip look like a legitimate None.
+        self.assert_rejects(Chain({"user": {}}).user.missing, "guest")
+        self.assert_rejects(Chain({"user": {}}).user.missing, 0)
+
+    def test_raises_even_with_an_explicit_default(self):
+        with self.assertRaises(TypeError):
+            Chain({"name": "Ada"}).name.value("Unknown", default="x")
+
+    def test_raises_before_strict_mode_reports_the_miss(self):
+        # The calling code's bug outranks the data's gap.
+        with self.assertRaises(TypeError):
+            Chain({"user": {}}, strict=True).user.missing.value("guest")
+
+    def test_keyword_default_and_callables_still_work(self):
+        data = Chain({"user": {"name": "Ada", "age": "30", "role": None}})
+        assert data.user.role.value(default="guest") == "guest"
+        assert data.user.missing.value(default="guest") == "guest"
+        assert data.user.name.value() == "Ada"
+        assert data.user.age.value(int) == 30
+        assert data.user.age.value(int, default=0) == 30
+        assert data.user.age.value(Decimal) == Decimal("30")
+        assert data.user.age.value(str.upper) == "30"
+        assert data.user.name.value(lambda v: v.lower()) == "ada"
+        assert data.user.missing.value(int, default=0) == 0
+        # A class is callable; a bound method is callable; None means "no coercion".
+        assert data.user.name.value(None) == "Ada"
+
+
 class TestValueWithCoercionAndDefault(unittest.TestCase):
     """`.value(type_, default=X)` coerces, falling back to X on missing or coercion failure."""
 

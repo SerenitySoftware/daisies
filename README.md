@@ -186,6 +186,8 @@ print(Chain({"amt": "n/a"}).amt.value(Decimal, default=Decimal("0")))  # Decimal
 
 "Never raises" here means whatever the sender put in the field: text where you expected a number, a number too big to fit, a dict where you expected a date. You get your default back instead of an exception. The one thing it won't hide is a bug in your own conversion function — if that breaks, you'll hear about it.
 
+Note that `default` is keyword-only: `.value(default="guest")` works, but a bare positional `.value("guest")` raises `TypeError`, because that slot is for the conversion function and a value you didn't mean to call is a bug worth hearing about.
+
 This replaces the common `... or "default"` pattern at the end of a chain. Because the default's type pins the return type, your IDE and type checker can infer it correctly when the chain is annotated.
 
 ### Usage: Missing values and `.fallback()`

@@ -79,6 +79,9 @@ class TestReadmeExamples(unittest.TestCase):
         assert data.user.missing.value(int, default=0) == 0
         assert data.user.role.value(int, default=-1) == -1
         assert Chain({"amt": "n/a"}).amt.value(Decimal, default=Decimal("0")) == Decimal("0")
+        # `default` is keyword-only; a bare positional string is refused, not swallowed.
+        with self.assertRaises(TypeError):
+            data.user.role.value("guest")
 
     def test_serialization_methods(self):
         data = Chain({"user": {"name": "Alice", "roles": ["admin", "editor"]}})
