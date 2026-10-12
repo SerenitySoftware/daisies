@@ -199,8 +199,16 @@ class Chain:
         region raises :class:`MissingPathError` instead.
 
         A coercion that fails falls back the same way a missing hop does — see
-        :data:`_COERCION_FAILURES` for what counts as a failure.
+        :data:`_COERCION_FAILURES` for what counts as a failure. A ``type_``
+        that is not callable at all is a bug in the calling code, not a shape
+        the data arrived in, so it raises :class:`TypeError` — even for a
+        missing node, and before strict mode gets a say.
         """
+        if type_ is not None and not callable(type_):
+            raise TypeError(
+                f".value() takes a callable to coerce with, got {type_!r}; "
+                f"to supply a default write .value(default={type_!r})"
+            )
         if default is _UNSET:
             self._fail_if_strict()
             default = None
