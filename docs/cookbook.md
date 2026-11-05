@@ -214,6 +214,10 @@ print(Chain(payload).tree())
 # └─ ok: bool = True
 ```
 
+Mapping subclasses and objects with the full read protocol listed in the README
+render as dictionaries too. An object with only `items()` keeps ordinary object
+navigation; `.tree()` shows a non-iterable object as a leaf and `.dict()` returns `{}`.
+
 For big payloads, rein in the output with `max_depth` and `max_items`:
 
 ```python

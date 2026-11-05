@@ -21,14 +21,13 @@ class TestSniffs(unittest.TestCase):
 
         assert sniff.isdictlike(Cart()) is False
 
-        # A duck-typed mapping, which is what the `items` check is there for,
-        # still counts even though it isn't a Mapping subclass.
+        # An items-only object lacks the rest of the read protocol.
         class Row:
             def items(self):
                 return [("a", 1)]
 
         assert Row().items() == [("a", 1)]
-        assert sniff.isdictlike(Row()) is True
+        assert sniff.isdictlike(Row()) is False
 
     def test_islistlike_follows_the_same_rule(self):
         # An iterable object with an `items` data attribute used to read as a
