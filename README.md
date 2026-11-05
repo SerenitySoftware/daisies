@@ -158,6 +158,16 @@ print(data.user.phone.number)  # None: a missing path is safe, no KeyError
 ```
 
 
+A `collections.abc.Mapping` subclass counts as a mapping. Other objects need the full
+read protocol: callable `get`, `keys`, `items`, `__getitem__`, and `__len__`
+(with the last two defined on the type). An `items()` method alone does not qualify:
+its object keeps ordinary attribute navigation, `.dict()` returns `{}`, and `.tree()`
+treats a non-iterable object as a leaf. Real fields named `keys`, `values`, or `items`
+still win. Detection checks the methods without calling them; their bodies must honor
+the mapping protocol. Reading a protocol property runs its getter; if that raises,
+the object does not qualify as a duck mapping. Errors from calling the methods still
+surface. Complete ducks may omit `values()`; its view then uses `items()`.
+
 ### Usage: Typed defaults with `.value()`
 For most uses, calling a Chain with `()` is enough to unwrap it. But when you want a fallback for missing data — or you want to coerce the value to a particular type — use `.value()`:
 

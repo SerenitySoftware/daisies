@@ -463,7 +463,7 @@ class Chain:
 
     def __getitem__(self, key: Any) -> Chain:
         item = _MISSING
-        if self._exists and isiterable(self._wrapped):
+        if self._exists and (isdictlike(self._wrapped) or isiterable(self._wrapped)):
             try:
                 item = self._wrapped[key]
             except (KeyError, IndexError, TypeError):
@@ -704,7 +704,11 @@ def _dict_view(wrapped: Any, name: str) -> list[Any]:
     ``keys()``/``values()``/``items()`` proxies never break a chain.
     """
     if isdictlike(wrapped):
-        return list(getattr(wrapped, name)())
+        view = getattr(wrapped, name, None)
+        if name == "values" and not callable(view):
+            # values() is optional in the duck read protocol; items() supplies it.
+            return [value for _, value in wrapped.items()]
+        return list(view())
 
     return []
 

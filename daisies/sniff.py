@@ -3,11 +3,19 @@ from typing import Any
 
 
 def isdictlike(obj: Any) -> bool:
-    # `items` has to be a *method*. The duck-type is here for mappings that
-    # aren't Mapping subclasses, but merely having the attribute matched any
-    # plain object with a field named `items` — a cart, an order, a page of
-    # results — and reading one of those as a mapping raised on every hop.
-    return isinstance(obj, Mapping) or callable(getattr(obj, "items", None))
+    if isinstance(obj, Mapping):
+        return True
+
+    # Navigation, dict conversion and tree inspection share this read protocol.
+    # Python looks special methods up on the type, not the instance.
+    try:
+        return all(callable(getattr(obj, name, None)) for name in ("get", "keys", "items")) and all(
+            callable(getattr(type(obj), name, None)) for name in ("__getitem__", "__len__")
+        )
+    except Exception:
+        # A descriptor that cannot be read does not advertise a usable protocol.
+        # Do not call the methods here or consume an arbitrary items iterator.
+        return False
 
 
 def islistlike(obj: Any) -> bool:
