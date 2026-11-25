@@ -267,6 +267,8 @@ That holds on either side of the colon. JSON only allows text keys, so a diction
 print(Chain({date(2026, 7, 9): 12}).json())  # '{"2026-07-09": 12}'
 ```
 
+Repairing keys uses an iterative walk, so deeply nested data does not consume Python's call stack during repair. The depth limits of `json.dumps` still apply.
+
 ### Usage: Trimming a payload with `.pluck()`
 Third-party payloads are usually much bigger than the part you're allowed to pass along. `.pluck()` picks out just the keys you name, so you can hand a trimmed, predictable object to the next system instead of forwarding whatever arrived:
 
