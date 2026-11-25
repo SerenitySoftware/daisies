@@ -1,5 +1,9 @@
 import json
+import sys
 import unittest
+from contextlib import suppress
+
+import pytest
 
 from daisies import Chain
 
@@ -103,6 +107,44 @@ class TestJson(unittest.TestCase):
 
         result = Chain({date(2026, 7, 9): {3, 1, 2}}).json(default=sorted)
         assert json.loads(result) == {"2026-07-09": [1, 2, 3]}
+
+
+@pytest.mark.parametrize("container", [dict, list, tuple])
+@pytest.mark.parametrize("indent", [None, 0])
+def test_deep_json_repair_matches_stdlib(container, indent):
+    # Find a depth the active stdlib encoder supports, without changing the
+    # process recursion limit. The C and indented encoders differ by version.
+    from datetime import date
+
+    depth = sys.getrecursionlimit() + 100
+    expected = None
+    while expected is None:
+        assert depth > 0
+        nested = "leaf"
+        for _ in range(depth):
+            nested = {"child": nested} if container is dict else container([nested])
+        with suppress(RecursionError):
+            expected = json.dumps({"2026-07-09": "x", "deep": nested}, indent=indent)
+        depth //= 2
+
+    assert Chain({date(2026, 7, 9): "x", "deep": nested}).json(indent=indent) == expected
+
+
+def test_json_repair_tracks_ancestors_without_treating_shared_values_as_cycles():
+    from datetime import date
+
+    mapping = {"name": "root"}
+    sequence = []
+    mapping["self"] = mapping
+    sequence.append(sequence)
+    shared = {"cycle": mapping, "list": sequence}
+    data = {date(2026, 7, 9): [shared, shared]}
+    expected = {"cycle": {"name": "root", "self": str(mapping)}, "list": [str(sequence)]}
+
+    assert json.loads(Chain(data).json()) == {"2026-07-09": [expected, expected]}
+    assert mapping["self"] is mapping
+    assert sequence[0] is sequence
+    assert data[date(2026, 7, 9)][0] is shared
 
 
 class TestDict(unittest.TestCase):

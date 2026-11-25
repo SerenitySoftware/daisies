@@ -662,7 +662,7 @@ class Chain:
         return obj
 
 
-def _json_safe(value: Any, seen: frozenset[int] = frozenset()) -> Any:
+def _json_safe(value: Any) -> Any:
     """Rebuild ``value`` into something :func:`json.dumps` will accept.
 
     Only the two shapes ``dumps`` rejects outright are rewritten. A dict key
@@ -671,29 +671,46 @@ def _json_safe(value: Any, seen: frozenset[int] = frozenset()) -> Any:
     *value*, so a ``date`` reads as ``"2026-07-09"`` on either side of the
     colon. A container that contains itself becomes its string form too,
     rather than the ``ValueError`` ``dumps`` raises for a circular reference;
-    tracking the containers on the way down is also what stops this walk from
-    recursing forever on that data.
+    tracking only the current ancestors leaves shared containers intact.
 
     Everything else is passed straight through, so a caller's own ``default=``
     still sees exactly the values it would have seen.
     """
-    if id(value) in seen:
-        return str(value)
+    # Iterator frames keep the walk off Python's call stack and use space
+    # proportional to depth, without copying an ancestor set at every level.
+    result: list[Any] = []
+    stack = [(iter([(None, value)]), result, None)]
+    ancestors: set[int] = set()
+    while stack:
+        items, output, source_id = stack[-1]
+        try:
+            key, item = next(items)
+        except StopIteration:
+            stack.pop()
+            if source_id is not None:
+                ancestors.remove(source_id)
+            continue
 
-    # Only dict/list/tuple, because those are precisely what dumps recurses
-    # into itself; any other container is a value its `default=` handles.
-    if isinstance(value, dict):
-        nested = seen | {id(value)}
-        return {
-            (key if isinstance(key, _JSON_KEY_TYPES) else str(key)): _json_safe(item, nested)
-            for key, item in value.items()
-        }
+        # Only dict/list/tuple, exactly the containers dumps traverses.
+        is_container = isinstance(item, (dict, list, tuple))
+        if id(item) in ancestors:
+            repaired = str(item)
+        elif is_container:
+            repaired = {} if isinstance(item, dict) else []
+        else:
+            repaired = item
 
-    if isinstance(value, (list, tuple)):
-        nested = seen | {id(value)}
-        return [_json_safe(item, nested) for item in value]
+        if isinstance(output, dict):
+            output[key if isinstance(key, _JSON_KEY_TYPES) else str(key)] = repaired
+        else:
+            output.append(repaired)
 
-    return value
+        if is_container and id(item) not in ancestors:
+            ancestors.add(id(item))
+            children = iter(item.items()) if isinstance(item, dict) else enumerate(item)
+            stack.append((children, repaired, id(item)))
+
+    return result[0]
 
 
 def _dict_view(wrapped: Any, name: str) -> list[Any]:
