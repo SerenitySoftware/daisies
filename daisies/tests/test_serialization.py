@@ -108,6 +108,39 @@ class TestJson(unittest.TestCase):
         result = Chain({date(2026, 7, 9): {3, 1, 2}}).json(default=sorted)
         assert json.loads(result) == {"2026-07-09": [1, 2, 3]}
 
+    def test_sort_keys_with_mixed_key_types(self):
+        # json.dumps sorts keys before rendering them, which raises TypeError
+        # when a dict mixes int and str keys. Repairing keys to their JSON
+        # string form lets sort_keys=True succeed.
+        assert Chain({1: "a", "b": 2}).json(sort_keys=True) == '{"1": "a", "b": 2}'
+
+    def test_sort_keys_preserves_json_spelling_for_bool_none_and_float(self):
+        # True/False/None must render and sort as "true"/"false"/"null", not
+        # Python's "True"/"False"/"None", and floats use JSON's spelling too.
+        data = Chain({True: 1, False: 2, None: 3, 1.5: 4, float("inf"): 5, "m": 6})
+        assert data.json(sort_keys=True) == '{"1.5": 4, "Infinity": 5, "false": 2, "m": 6, "null": 3, "true": 1}'
+
+    def test_sort_keys_with_mixed_and_unsupported_keys_nested(self):
+        from datetime import date
+
+        data = Chain({"nested": [{date(2026, 7, 9): {3, 1, 2}, 1: "x", "a": "y"}]})
+        result = data.json(sort_keys=True, default=sorted)
+        assert result == '{"nested": [{"1": "x", "2026-07-09": [1, 2, 3], "a": "y"}]}'
+
+    def test_sort_keys_with_skipkeys_still_drops_unsupported_keys(self):
+        from datetime import date
+
+        data = Chain({date(2026, 7, 9): "drop", 1: "b", "a": 2})
+        assert data.json(sort_keys=True, skipkeys=True) == '{"1": "b", "a": 2}'
+
+    def test_sort_keys_with_allow_nan_false_still_rejects_nan_float_key(self):
+        with pytest.raises(ValueError):
+            Chain({float("inf"): 1, "a": 2}).json(sort_keys=True, allow_nan=False)
+
+    def test_sort_keys_homogeneous_int_keys_keep_stdlib_order(self):
+        # When dumps accepts the dict directly, the fast path runs untouched.
+        assert Chain({10: "b", 2: "a"}).json(sort_keys=True) == '{"2": "a", "10": "b"}'
+
 
 @pytest.mark.parametrize("container", [dict, list, tuple])
 @pytest.mark.parametrize("indent", [None, 0])

@@ -239,12 +239,21 @@ class Chain:
         try:
             return _json.dumps(self._wrapped, indent=indent, **kwargs)
         except (TypeError, ValueError):
-            # Two shapes refuse to serialize before `default=` ever gets a
-            # look in: a key that isn't a string or number, and data that
-            # refers back to itself. Repairing those and trying once more
-            # keeps the promise at the door while costing the ordinary
-            # payload nothing.
-            return _json.dumps(_json_safe(self._wrapped), indent=indent, **kwargs)
+            # Three shapes refuse to serialize before `default=` ever gets a
+            # look in: a key that isn't a string or number, mixed key types
+            # under `sort_keys=True`, and data that refers back to itself.
+            # Repairing those and trying once more keeps the promise at the
+            # door while costing the ordinary payload nothing.
+            return _json.dumps(
+                _json_safe(
+                    self._wrapped,
+                    stringify_keys=bool(kwargs.get("sort_keys")),
+                    skipkeys=bool(kwargs.get("skipkeys")),
+                    allow_nan=bool(kwargs.get("allow_nan", True)),
+                ),
+                indent=indent,
+                **kwargs,
+            )
 
     def dict(self) -> dict[Any, Any]:
         """Return the wrapped value as a plain ``dict``.
@@ -662,16 +671,46 @@ class Chain:
         return obj
 
 
-def _json_safe(value: Any) -> Any:
+def _json_key(key: Any, *, allow_nan: bool = True) -> str:
+    """Render a dict key to the exact string :func:`json.dumps` emits for it.
+
+    Used on the repair path when ``sort_keys=True`` hits mixed key types that
+    Python cannot compare directly. Matching ``json.dumps`` keeps ``True`` /
+    ``False`` / ``None`` as ``"true"`` / ``"false"`` / ``"null"`` rather than
+    turning them into ``"True"`` / ``"False"`` / ``"None"``.
+    """
+    if isinstance(key, str):
+        return key
+    if key is None:
+        return "null"
+    if isinstance(key, bool):
+        return "true" if key else "false"
+    if isinstance(key, int):
+        return str(key)
+    if isinstance(key, float):
+        return _json.dumps(key, allow_nan=allow_nan)
+    return str(key)
+
+
+def _json_safe(
+    value: Any,
+    *,
+    stringify_keys: bool = False,
+    skipkeys: bool = False,
+    allow_nan: bool = True,
+) -> Any:
     """Rebuild ``value`` into something :func:`json.dumps` will accept.
 
-    Only the two shapes ``dumps`` rejects outright are rewritten. A dict key
-    that isn't a string, number, bool, or ``None`` becomes its string form —
-    the same degradation ``default=str`` already gives an unserializable
-    *value*, so a ``date`` reads as ``"2026-07-09"`` on either side of the
-    colon. A container that contains itself becomes its string form too,
-    rather than the ``ValueError`` ``dumps`` raises for a circular reference;
-    tracking only the current ancestors leaves shared containers intact.
+    Only the shapes ``dumps`` rejects outright are rewritten. A dict key that
+    isn't a string, number, bool, or ``None`` becomes its string form — the
+    same degradation ``default=str`` already gives an unserializable *value*,
+    so a ``date`` reads as ``"2026-07-09"`` on either side of the colon. When
+    ``stringify_keys`` is set (for ``sort_keys=True``), every dict key is
+    normalized via :func:`_json_key` so mixed key types can be sorted without
+    raising ``TypeError``; ``skipkeys=True`` still drops unsupported keys. A
+    container that contains itself becomes its string form too, rather than the
+    ``ValueError`` ``dumps`` raises for a circular reference; tracking only the
+    current ancestors leaves shared containers intact.
 
     Everything else is passed straight through, so a caller's own ``default=``
     still sees exactly the values it would have seen.
@@ -691,6 +730,9 @@ def _json_safe(value: Any) -> Any:
                 ancestors.remove(source_id)
             continue
 
+        if isinstance(output, dict) and skipkeys and not isinstance(key, _JSON_KEY_TYPES):
+            continue
+
         # Only dict/list/tuple, exactly the containers dumps traverses.
         is_container = isinstance(item, (dict, list, tuple))
         if id(item) in ancestors:
@@ -701,7 +743,12 @@ def _json_safe(value: Any) -> Any:
             repaired = item
 
         if isinstance(output, dict):
-            output[key if isinstance(key, _JSON_KEY_TYPES) else str(key)] = repaired
+            safe_key = (
+                _json_key(key, allow_nan=allow_nan)
+                if stringify_keys
+                else (key if isinstance(key, _JSON_KEY_TYPES) else str(key))
+            )
+            output[safe_key] = repaired
         else:
             output.append(repaired)
 
