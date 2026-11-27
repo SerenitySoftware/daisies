@@ -27,6 +27,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v6
     - name: Install Python
+      id: setup-python
       uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
@@ -42,10 +43,11 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ./.venv
-        # The venv is platform- and interpreter-specific, so the key must be
-        # too — a bare lockfile hash lets a macOS venv restore into a Windows
-        # job and vice versa.
-        key: venv-${{ matrix.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+        # The venv is platform- and interpreter-specific, so the key must
+        # include the OS, exact Python patch version (not just the matrix
+        # minor version, since a patch upgrade breaks symlinks in a cached
+        # .venv), and lockfile hash.
+        key: venv-${{ matrix.os }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('poetry.lock') }}
     - name: Install Dependencies
       run: poetry install
     - name: Run Black
