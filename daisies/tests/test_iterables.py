@@ -123,10 +123,7 @@ class TestIterables(unittest.TestCase):
 @pytest.mark.parametrize("value", [None, 0, 1, False, True, 1.5, object()])
 def test_non_iterable_nodes_are_empty(value, strict_mode):
     node = Chain({"users": value}, strict=strict_mode).users
-    rows = []
-    for row in node:
-        rows.append(row)
-    assert rows == []
+    assert [row for row in node] == []
     assert list(node) == []
     assert len(node) == 0
     assert "anything" not in node
