@@ -120,7 +120,9 @@ print(data.missing / 0)  # 0
 
 ### Usage: Lists and other iterables
 Daisies allows you to work with lists, sets, and other iterables in a natural way.
-You can access items by index and iterate over them. If they don't exist, Daisies will return `None`.
+You can access items by index and iterate over them. An absent index resolves to `None`.
+
+A missing, null (`None`), or scalar node acts like an empty collection: loops run zero times, `len()` returns `0`, and `in` returns `False`. Lists, dicts, and strings keep their usual iteration, length, and membership behavior. In strict mode, these three operations on a missing path raise `MissingPathError`; a resolved `None` or scalar still acts empty.
 
 Iterating a `Chain` yields `Chain`-wrapped items, so you can keep navigating each element safely inside the loop — no need to unwrap and re-wrap. Missing fields on an element still resolve to `None` instead of raising.
 

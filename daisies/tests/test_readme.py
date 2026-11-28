@@ -71,6 +71,22 @@ class TestReadmeExamples(unittest.TestCase):
         assert data.user.address.city == "Wonderland"
         assert data.user.phone.number() is None
 
+    def test_missing_null_and_scalar_collections(self):
+        for strict_mode in (False, True):
+            data = Chain({"null": None, "scalar": 42}, strict=strict_mode)
+            nodes = [data.null, data.scalar]
+            if not strict_mode:
+                nodes.append(data.missing)
+            for node in nodes:
+                assert [row for row in node] == []
+                assert len(node) == 0
+                assert "anything" not in node
+
+        missing = Chain({}, strict=True).users
+        for unwrap in (lambda: [row for row in missing], lambda: len(missing), lambda: "x" in missing):
+            with self.assertRaises(MissingPathError):
+                unwrap()
+
     def test_typed_defaults_with_value(self):
         data = Chain({"user": {"role": None, "age": "30"}})
         assert data.user.role.value(default="guest") == "guest"

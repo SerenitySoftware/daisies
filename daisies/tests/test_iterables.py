@@ -1,6 +1,8 @@
 import unittest
 
-from daisies import Chain
+import pytest
+
+from daisies import Chain, MissingPathError, strict
 
 
 class TestIterables(unittest.TestCase):
@@ -108,11 +110,63 @@ class TestIterables(unittest.TestCase):
             assert index == item
 
     def test_non_iterable(self):
-        with self.assertRaises(TypeError):
-            enumerate(Chain(1))
+        assert list(enumerate(Chain(1))) == []
 
     def test_no_contains(self):
         self.assertFalse("x" in Chain(None))
 
     def test_no_len(self):
         self.assertEqual(len(Chain(None)), 0)
+
+
+@pytest.mark.parametrize("strict_mode", [False, True])
+@pytest.mark.parametrize("value", [None, 0, 1, False, True, 1.5, object()])
+def test_non_iterable_nodes_are_empty(value, strict_mode):
+    node = Chain({"users": value}, strict=strict_mode).users
+    assert [row for row in node] == []
+    assert list(node) == []
+    assert len(node) == 0
+    assert "anything" not in node
+    assert None not in node
+
+
+def test_missing_nodes_are_empty():
+    node = Chain({}).users.rows
+    assert [row for row in node] == []
+    assert list(node) == []
+    assert len(node) == 0
+    assert "anything" not in node
+    assert None not in node
+
+
+@pytest.mark.parametrize("unwrap", [iter, lambda node: [row for row in node], len, lambda node: "x" in node])
+@pytest.mark.parametrize("ambient", [False, True])
+def test_missing_nodes_raise_with_the_path_in_strict_mode(unwrap, ambient):
+    node = Chain({}, strict=None if ambient else True).users.rows
+    with strict():
+        with pytest.raises(MissingPathError, match=r"^users.rows: missing at users$"):
+            unwrap(node)
+
+
+@pytest.mark.parametrize("unwrap", [lambda node: [row for row in node], len, lambda node: "x" in node])
+def test_explicit_tolerant_mode_overrides_strict_region(unwrap):
+    node = Chain({}, strict=False).users
+    with strict():
+        assert not unwrap(node)
+
+
+@pytest.mark.parametrize("strict_mode", [False, True])
+@pytest.mark.parametrize("value, member", [([1, 2], 1), ({"a": 1, "b": 2}, "a"), ("ab", "a")])
+def test_real_containers_keep_iteration_length_and_membership(value, member, strict_mode):
+    node = Chain({"users": value}, strict=strict_mode).users
+    assert [row.value() for row in node] == list(value)
+    assert len(node) == len(value)
+    assert member in node
+    assert "absent" not in node
+
+
+def test_wrong_membership_operand_on_a_real_container_still_raises():
+    with pytest.raises(TypeError):
+        1 in Chain("abc")
+    with pytest.raises(TypeError):
+        [] in Chain({"a": 1})
