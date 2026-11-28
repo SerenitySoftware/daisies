@@ -487,27 +487,32 @@ class Chain:
         return self._navigate(f"[{key!r}]", item)
 
     def __iter__(self) -> Iterator[Chain]:
+        self._fail_if_strict()
         # Yield wrapped items so navigation continues through a loop without
         # re-wrapping (e.g. ``for row in chain.users: row.name``). Wrapped items
         # still compare equal to their raw values, so ``sorted``/``==``/``in``
-        # keep working. Returning None for non-iterables makes ``iter()`` raise
-        # TypeError just as before (a generator function wouldn't — it defers).
+        # keep working. Check strict mode here rather than in a generator body
+        # so even iter(missing) reports the unresolved path immediately.
         if isiterable(self._wrapped):
             return (self._navigate(f"[{index}]", item) for index, item in enumerate(self._wrapped))
 
-        return None  # type: ignore[return-value]
+        return iter(())
 
     def __contains__(self, item: Any) -> bool:
-        if self._wrapped is None:
+        self._fail_if_strict()
+        # Keep native membership rules (including invalid search operands) for
+        # containers, while treating a scalar as an empty collection.
+        if not isiterable(self._wrapped) and not isdictlike(self._wrapped):
             return False
 
         return item in self._wrapped
 
     def __len__(self) -> int:
-        if not self._wrapped:
+        self._fail_if_strict()
+        try:
+            return len(self._wrapped)
+        except TypeError:
             return 0
-
-        return len(self._wrapped)
 
     def __bool__(self) -> bool:
         return bool(self._wrapped)
